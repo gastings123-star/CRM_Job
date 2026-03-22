@@ -453,8 +453,7 @@
       .settings-grid { grid-template-columns: 1fr; }
       .bell-dropdown { width: 320px; }
     }
-  
-    /* ===== NOTIFICATION BELL ===== */
+
     .notif-wrap { position:relative; }
     .notif-btn { position:relative; background:transparent; border:1px solid var(--line); border-radius:10px; padding:8px 10px; cursor:pointer; font-size:18px; line-height:1; display:flex; align-items:center; }
     .notif-btn:hover { border-color:var(--primary); }
@@ -478,6 +477,10 @@
     .notif-read-btn:hover { color:var(--primary); }
     .notif-empty { padding:24px 16px; text-align:center; color:var(--muted); font-size:13px; }
 
+    .loading-banner { position:fixed; bottom:16px; right:16px; background:#1f2937; color:#fff; padding:10px 16px; border-radius:10px; font-size:13px; font-weight:500; z-index:999; display:none; box-shadow:0 4px 12px rgba(0,0,0,0.2); }
+    .loading-banner.show { display:block; }
+    .save-indicator { position:fixed; bottom:16px; right:16px; background:#059669; color:#fff; padding:8px 14px; border-radius:10px; font-size:12px; font-weight:500; z-index:999; opacity:0; transition:opacity .3s; pointer-events:none; }
+    .save-indicator.show { opacity:1; }
   </style>
 </head>
 <body>
@@ -500,16 +503,11 @@
           <div id="bellList"></div>
         </div>
       </div>
-      <div class="notif-wrap" id="notifWrap">
-        <button class="notif-btn" id="notifBtn" title="Уведомления">&#128276;<span class="notif-badge hidden" id="notifCount"></span></button>
-        <div class="notif-panel" id="notifPanel">
-          <div class="notif-header"><span>Уведомления</span><button class="notif-mark-all" id="notifMarkAll">Отметить все прочитанными</button></div>
-          <div id="notifList"></div>
-        </div>
-      </div>
     </div>
   </div>
 
+    <div class="loading-banner" id="loadingBanner">⏳ Загрузка данных из облака...</div>
+  <div class="save-indicator" id="saveIndicator">✓ Сохранено</div>
   <div id="crmScreen" class="screen active crm-layout">
     <aside class="sidebar">
       <div class="filters">
@@ -933,48 +931,6 @@
       ];
     }
 
-    const NOTIF_READ_KEY = "staff_crm_notif_read_v1";
-    let readNotifIds = new Set();
-    function loadReadNotifs(){ try{ readNotifIds=new Set(JSON.parse(localStorage.getItem(NOTIF_READ_KEY)||"[]")); }catch(e){ readNotifIds=new Set(); } }
-    function saveReadNotifs(){ localStorage.setItem(NOTIF_READ_KEY,JSON.stringify([...readNotifIds])); }
-
-    function buildNotifications(){
-      const today=new Date(); const todayStr=today.toISOString().slice(0,10);
-      const in7=new Date(today.getTime()+7*24*60*60*1000).toISOString().slice(0,10);
-      const notifs=[];
-      state.employees.forEach(e=>{
-        const name=e.fullName; const id=e.id;
-        const fotMonths=monthDiff(e.salaryReviewDate);
-        if(fotMonths>12) notifs.push({id:"fot-overdue-"+id,color:"red",text:"Пересмотр ФОТ просрочен",sub:name+" — "+fotMonths+" мес. без пересмотра",empId:id,tab:"main"});
-        (e.tasks||[]).forEach((t,i)=>{ if(t.status!=="выполнена"&&t.due&&t.due<todayStr) notifs.push({id:"task-overdue-"+id+"-"+i,color:"red",text:"Просрочена задача",sub:name+": «"+t.text+"» — срок "+t.due,empId:id,tab:"tasks"}); });
-        (e.development||[]).forEach((d,i)=>{ if(d.status!=="выполнено"&&d.deadline&&d.deadline<todayStr) notifs.push({id:"dev-overdue-"+id+"-"+i,color:"red",text:"Просрочена зона развития",sub:name+": «"+d.zone+"»",empId:id,tab:"skills"}); });
-        if(e.risk&&e.risk.level==="высокий"&&!(e.risk.comment||"").trim()) notifs.push({id:"risk-nocomment-"+id,color:"red",text:"Высокий риск увольнения без комментария",sub:name,empId:id,tab:"extra"});
-        if(fotMonths>=9&&fotMonths<=12) notifs.push({id:"fot-soon-"+id,color:"yellow",text:"Скоро пересмотр ФОТ",sub:name+" — "+fotMonths+" мес.",empId:id,tab:"main"});
-        (e.tasks||[]).forEach((t,i)=>{ if(t.status!=="выполнена"&&t.due&&t.due>=todayStr&&t.due<=in7) notifs.push({id:"task-soon-"+id+"-"+i,color:"yellow",text:"Задача истекает через 7 дней",sub:name+": «"+t.text+"» — срок "+t.due,empId:id,tab:"tasks"}); });
-        (e.load.vacations||[]).forEach((v,i)=>{ if(v.from&&v.from>=todayStr&&v.from<=in7) notifs.push({id:"vac-soon-"+id+"-"+i,color:"yellow",text:"Сотрудник уходит в отпуск через 7 дней",sub:name+" — с "+v.from,empId:id,tab:"load"}); });
-        const lastOoo=(e.oneOnOne&&e.oneOnOne.history&&e.oneOnOne.history[0])?e.oneOnOne.history[0].date:"";
-        const daysSinceOoo=lastOoo?Math.floor((today-new Date(lastOoo))/(1000*60*60*24)):9999;
-        if(daysSinceOoo>30) notifs.push({id:"ooo-overdue-"+id,color:"yellow",text:"1-on-1 не проводился более 30 дней",sub:name+" — "+(daysSinceOoo===9999?"история пустая":daysSinceOoo+" дней назад"),empId:id,tab:"onetoone"});
-        if(e.birthday){ const bd=e.birthday.slice(5); if(todayStr.slice(5)===bd) notifs.push({id:"birthday-"+id,color:"blue",text:"День рождения сегодня! 🎂",sub:name,empId:id,tab:"main"}); }
-        if(e.hireDate){ const hd=e.hireDate.slice(5); if(todayStr.slice(5)===hd){ const yrs=Math.floor(monthDiff(e.hireDate)/12); if(yrs>0) notifs.push({id:"anniversary-"+id,color:"blue",text:"Годовщина работы 🎉 "+yrs+" "+(yrs===1?"год":yrs<5?"года":"лет"),sub:name,empId:id,tab:"main"}); } }
-        if(e.oneOnOne&&e.oneOnOne.nextDate===todayStr) notifs.push({id:"ooo-today-"+id,color:"blue",text:"Запланирован 1-on-1 сегодня",sub:name,empId:id,tab:"onetoone"});
-      });
-      const order={red:0,yellow:1,blue:2};
-      notifs.sort((a,b)=>{ const ra=readNotifIds.has(a.id)?1:0; const rb=readNotifIds.has(b.id)?1:0; if(ra!==rb) return ra-rb; return (order[a.color]||2)-(order[b.color]||2); });
-      return notifs;
-    }
-
-    function renderNotifications(){
-      const notifs=buildNotifications();
-      const unread=notifs.filter(n=>!readNotifIds.has(n.id));
-      const badge=document.getElementById("notifCount");
-      if(unread.length>0){badge.textContent=unread.length>99?"99+":unread.length;badge.classList.remove("hidden");}
-      else{badge.classList.add("hidden");}
-      const list=document.getElementById("notifList");
-      if(!notifs.length){list.innerHTML='<div class="notif-empty">Нет уведомлений — всё в порядке ✓</div>';return;}
-      list.innerHTML=notifs.map(n=>{ const isRead=readNotifIds.has(n.id); return '<div class="notif-item'+(isRead?' read':'')+'" data-notif-id="'+n.id+'" data-notif-emp="'+n.empId+'" data-notif-tab="'+(n.tab||'main')+'">'+'<div class="notif-dot '+n.color+'"></div><div class="notif-body"><div class="notif-text">'+escapeHtml(n.text)+'</div><div class="notif-sub">'+escapeHtml(n.sub)+'</div></div><button class="notif-read-btn" data-mark-read="'+n.id+'" title="Отметить прочитанным">✓</button></div>'; }).join("");
-    }
-
     function loadState() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
@@ -997,8 +953,45 @@
         state.selectedId = state.employees[0].id;
       }
     }
-    function saveState() {
+
+    function showLoadingBanner(msg) {
+      const b = document.getElementById('loadingBanner');
+      if(b){ b.textContent = msg; b.classList.add('show'); }
+    }
+    function hideLoadingBanner() {
+      const b = document.getElementById('loadingBanner');
+      if(b) b.classList.remove('show');
+    }
+    function showSaveIndicator() {
+      const s = document.getElementById('saveIndicator');
+      if(!s) return;
+      s.classList.add('show');
+      setTimeout(()=>s.classList.remove('show'), 2000);
+    }
+
+    const SUPABASE_URL = 'https://aklmwqacsdlndyyvjqus.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFrbG13cWFjc2RsbmR5eXZqcXVzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMTIyNjQsImV4cCI6MjA4OTY4ODI2NH0.nHrlRIJWzjBOA3icUz3JFcEHw387FNlBlHugdBT4cJA';
+
+    async function saveState() {
+      // Save to localStorage as backup
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees: state.employees, selectedId: state.selectedId }));
+      showSaveIndicator();
+      // Save to Supabase
+      try {
+        await fetch(SUPABASE_URL + '/rest/v1/crm_state?id=eq.main', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            data: { employees: state.employees, selectedId: state.selectedId, teams: state.teams },
+            updated_at: new Date().toISOString()
+          })
+        });
+      } catch(e) { console.warn('Supabase save failed:', e); }
     }
     function selectedEmployee() { return state.employees.find(e => e.id === state.selectedId) || null; }
     function filteredEmployees() {
@@ -1620,7 +1613,7 @@
 
     function renderAll() {
       renderTeamFilter(); renderTeamCounters(); renderEmployeeList(); renderEmployeePanel(); enhanceMainTeamSelect();
-      renderDashboard(); renderCalendar(); renderDevelopment(); renderSettings(); renderNotifications();
+      renderDashboard(); renderCalendar(); renderDevelopment(); renderSettings();
       renderBell();
       document.getElementById("crmScreen").classList.toggle("active",state.screen==="crm");
       document.getElementById("dashboardScreen").classList.toggle("active",state.screen==="dashboard");
@@ -1732,10 +1725,11 @@
     document.getElementById("importFileInput").addEventListener("change",e=>{ const file=e.target.files&&e.target.files[0]; startImportFlow(file); e.target.value=""; });
 
     loadReadNotifs();
-    loadReadNotifs();
-    loadState();
-    loadTeams();
-    renderAll();
+    (async () => {
+      await loadState();
+      loadTeams();
+      renderAll();
+    })();
   </script>
 </body>
 </html>
