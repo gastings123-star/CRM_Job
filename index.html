@@ -1,0 +1,1741 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Staff CRM</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --line: #e5eaf1;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --danger: #dc2626;
+      --warn: #d97706;
+      --ok: #059669;
+      --shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .topbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .title { font-size: 20px; font-weight: 700; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    /* BELL */
+    .bell-wrap { position: relative; }
+    .bell-btn {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 7px 11px;
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      position: relative;
+    }
+    .bell-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background: var(--danger);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 999px;
+      min-width: 17px;
+      height: 17px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      display: none;
+    }
+    .bell-badge.visible { display: flex; }
+    .bell-dropdown {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      width: 380px;
+      max-height: 480px;
+      overflow-y: auto;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 12px 32px rgba(15,23,42,0.14);
+      z-index: 200;
+    }
+    .bell-dropdown.open { display: block; }
+    .bell-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+      font-size: 14px;
+      position: sticky;
+      top: 0;
+      background: #fff;
+      z-index: 1;
+    }
+    .bell-mark-all {
+      font-size: 12px;
+      color: var(--primary);
+      cursor: pointer;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      padding: 4px 8px;
+    }
+    .notif-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .notif-item:last-child { border-bottom: none; }
+    .notif-item:hover { background: #f8fafc; }
+    .notif-item.read { opacity: .5; }
+    .notif-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+    .notif-dot.red { background: var(--danger); }
+    .notif-dot.yellow { background: var(--warn); }
+    .notif-dot.blue { background: var(--primary); }
+    .notif-body { flex: 1; }
+    .notif-text { font-size: 13px; color: var(--text); line-height: 1.4; }
+    .notif-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .notif-read-btn {
+      font-size: 11px;
+      border: 1px solid var(--line);
+      background: transparent;
+      border-radius: 6px;
+      padding: 2px 7px;
+      cursor: pointer;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .notif-read-btn:hover { background: #f1f5f9; }
+    .notif-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
+
+    .screen { display: none; height: calc(100vh - 57px); }
+    .screen.active { display: flex; }
+    .crm-layout { width: 100%; }
+    .sidebar {
+      width: 360px;
+      min-width: 320px;
+      max-width: 420px;
+      border-right: 1px solid var(--line);
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+    }
+    .main {
+      flex: 1;
+      padding: 14px;
+      overflow: auto;
+    }
+    .filters {
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 8px;
+      background: #fbfcff;
+    }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid #d7dfeb;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 14px;
+      background: #fff;
+      color: var(--text);
+    }
+    textarea { min-height: 72px; resize: vertical; }
+    .team-counters {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+    .chip {
+      background: #eef2ff;
+      color: #3730a3;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .employee-list { overflow: auto; padding: 8px; }
+    .employee-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      margin-bottom: 8px;
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 10px;
+      cursor: pointer;
+      background: #fff;
+    }
+    .employee-card.active { outline: 2px solid #bfdbfe; }
+    .avatar {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      color: #fff;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .emp-name { font-weight: 700; font-size: 14px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .loadbar {
+      margin-top: 6px;
+      height: 8px;
+      border-radius: 999px;
+      background: #edf2f7;
+      overflow: hidden;
+    }
+    .loadbar > span { display: block; height: 100%; background: var(--ok); }
+    .review-alert {
+      margin-top: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-block;
+      padding: 3px 7px;
+      border-radius: 999px;
+    }
+    .review-alert.warn { background: #fef3c7; color: #92400e; }
+    .review-alert.danger { background: #fee2e2; color: #991b1b; }
+    .empty {
+      border: 1px dashed #c8d2e1;
+      border-radius: var(--radius);
+      padding: 16px;
+      color: var(--muted);
+      background: #fff;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px;
+    }
+    .tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .tab-btn { font-size: 13px; padding: 7px 10px; }
+    .tab-btn.active { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
+    .grid-2, .grid-3 {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .grid-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: #374151;
+    }
+    .calc {
+      font-size: 12px;
+      color: #334155;
+      margin-top: 4px;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 5px 7px;
+    }
+    .section-title { font-size: 14px; font-weight: 800; margin: 12px 0 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px; }
+    th, td { border: 1px solid var(--line); padding: 6px; vertical-align: top; }
+    th { background: #f8fafc; text-align: left; }
+    .row-actions { display: flex; justify-content: flex-end; }
+    .danger-text { color: var(--danger); font-weight: 700; }
+    .status-overdue { background: #fef2f2; }
+    .stats {
+      padding: 14px;
+      width: 100%;
+      overflow: auto;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .kpi {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+    .kpi .v { font-size: 26px; font-weight: 800; margin-top: 6px; }
+    .dash-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 10px;
+    }
+    .dash-grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .kpi.good .v { color: var(--ok); }
+    .kpi.warn .v { color: var(--warn); }
+    .kpi.danger .v { color: var(--danger); }
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge.good { background: #dcfce7; color: #166534; }
+    .badge.warn { background: #fef3c7; color: #92400e; }
+    .badge.danger { background: #fee2e2; color: #991b1b; }
+    .employee-link {
+      border: 0;
+      background: transparent;
+      color: #1d4ed8;
+      cursor: pointer;
+      padding: 0;
+      font-weight: 700;
+      text-align: left;
+    }
+    .employee-link:hover { text-decoration: underline; }
+    .dash-card-list {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .dash-item {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      background: #fff;
+    }
+    .dash-item.danger { border-color: #fecaca; background: #fef2f2; }
+    .dash-item.warn { border-color: #fde68a; background: #fffbeb; }
+    .dash-item.good { border-color: #bbf7d0; background: #f0fdf4; }
+    .last-meeting-row { background: #f0fdf4; }
+    .loadbar.compact { margin-top: 4px; height: 7px; }
+    .list { margin: 0; padding-left: 16px; }
+    .list li { margin-bottom: 6px; }
+    .dots { letter-spacing: 2px; color: #f59e0b; font-size: 16px; }
+    .calendar-screen {
+      padding: 14px;
+      width: 100%;
+      overflow: auto;
+    }
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: 220px repeat(92, minmax(12px, 1fr));
+      gap: 1px;
+      align-items: center;
+      min-width: 1300px;
+      background: #e2e8f0;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .cal-cell {
+      background: #fff;
+      min-height: 22px;
+      font-size: 11px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #64748b;
+    }
+    .cal-name {
+      justify-content: flex-start;
+      padding: 0 8px;
+      font-weight: 700;
+      color: #1f2937;
+      position: sticky;
+      left: 0;
+      z-index: 1;
+    }
+    .cal-head {
+      background: #f8fafc;
+      font-weight: 700;
+      color: #334155;
+    }
+    .cal-vac { background: #bfdbfe; }
+    .cal-sick { background: #fecaca; }
+    .cal-today { outline: 2px solid #2563eb; outline-offset: -2px; }
+    .capacity-low { background: #fef2f2; color: #991b1b; font-weight: 700; }
+    .dev-columns {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .skill-lvl-low { background: #fee2e2; color: #991b1b; font-weight: 700; text-align: center; }
+    .skill-lvl-mid { background: #fef3c7; color: #92400e; font-weight: 700; text-align: center; }
+    .skill-lvl-high { background: #dcfce7; color: #166534; font-weight: 700; text-align: center; }
+    .team-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: middle; }
+    .settings-layout { padding: 14px; width: 100%; overflow: auto; }
+    .settings-grid { display: grid; gap: 10px; grid-template-columns: 2fr 1fr; }
+    .team-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: #fff; }
+    .team-row-left { display: flex; align-items: center; gap: 8px; }
+    .team-actions { display: flex; gap: 6px; }
+    .btn-small { padding: 4px 8px; font-size: 12px; }
+    .import-modal {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+      display: none; align-items: center; justify-content: center; z-index: 80;
+    }
+    .import-modal.active { display: flex; }
+    .import-card {
+      width: min(1000px, 95vw); max-height: 88vh; overflow: auto;
+      background: #fff; border-radius: 12px; border: 1px solid var(--line); box-shadow: var(--shadow); padding: 12px;
+    }
+    @media (max-width: 1080px) {
+      .screen.active.crm-layout { flex-direction: column; }
+      .sidebar { width: 100%; max-width: 100%; min-width: 0; height: 42vh; border-right: 0; border-bottom: 1px solid var(--line); }
+      .kpi-grid, .dash-grid, .dash-grid-3, .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .dev-columns { grid-template-columns: 1fr; }
+      .settings-grid { grid-template-columns: 1fr; }
+      .bell-dropdown { width: 320px; }
+    }
+  
+    /* ===== NOTIFICATION BELL ===== */
+    .notif-wrap { position:relative; }
+    .notif-btn { position:relative; background:transparent; border:1px solid var(--line); border-radius:10px; padding:8px 10px; cursor:pointer; font-size:18px; line-height:1; display:flex; align-items:center; }
+    .notif-btn:hover { border-color:var(--primary); }
+    .notif-badge { position:absolute; top:-6px; right:-6px; background:var(--danger); color:#fff; border-radius:999px; font-size:10px; font-weight:700; min-width:18px; height:18px; display:flex; align-items:center; justify-content:center; padding:0 4px; border:2px solid #fff; }
+    .notif-badge.hidden { display:none; }
+    .notif-panel { position:absolute; right:0; top:calc(100% + 8px); width:380px; max-height:520px; overflow-y:auto; background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 12px 32px rgba(15,23,42,0.14); z-index:200; display:none; }
+    .notif-panel.open { display:block; }
+    .notif-header { display:flex; justify-content:space-between; align-items:center; padding:10px 14px; border-bottom:1px solid var(--line); font-size:13px; font-weight:700; background:#f8fafc; border-radius:14px 14px 0 0; position:sticky; top:0; }
+    .notif-mark-all { font-size:11px; font-weight:600; color:var(--primary); background:transparent; border:none; cursor:pointer; padding:2px 6px; }
+    .notif-mark-all:hover { text-decoration:underline; }
+    .notif-item { display:flex; gap:10px; align-items:flex-start; padding:10px 14px; border-bottom:1px solid var(--line); cursor:pointer; transition:background .12s; }
+    .notif-item:hover { background:#f4f7fb; }
+    .notif-item.read { opacity:.45; }
+    .notif-item:last-child { border-bottom:none; }
+    .notif-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+    .notif-dot.red { background:var(--danger); } .notif-dot.yellow { background:var(--warn); } .notif-dot.blue { background:var(--primary); }
+    .notif-body { flex:1; }
+    .notif-text { font-size:13px; font-weight:600; color:var(--text); margin-bottom:2px; }
+    .notif-sub { font-size:11px; color:var(--muted); }
+    .notif-read-btn { font-size:11px; color:var(--muted); background:transparent; border:none; cursor:pointer; padding:2px 4px; flex-shrink:0; margin-top:2px; }
+    .notif-read-btn:hover { color:var(--primary); }
+    .notif-empty { padding:24px 16px; text-align:center; color:var(--muted); font-size:13px; }
+
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="title">Staff CRM руководителя</div>
+    <div class="actions">
+      <button id="goCrm" class="primary">CRM</button>
+      <button id="goDashboard">Дашборд</button>
+      <button id="goCalendar">Календарь</button>
+      <button id="goDevelopment">Развитие</button>
+      <button id="goSettings">Настройки</button>
+      <button id="exportCsv">Экспорт в Excel (CSV)</button>
+      <div class="bell-wrap">
+        <button class="bell-btn" id="bellBtn" title="Уведомления">🔔<span class="bell-badge" id="bellBadge"></span></button>
+        <div class="bell-dropdown" id="bellDropdown">
+          <div class="bell-header">
+            <span>Уведомления</span>
+            <button class="bell-mark-all" id="bellMarkAll">Отметить все прочитанными</button>
+          </div>
+          <div id="bellList"></div>
+        </div>
+      </div>
+      <div class="notif-wrap" id="notifWrap">
+        <button class="notif-btn" id="notifBtn" title="Уведомления">&#128276;<span class="notif-badge hidden" id="notifCount"></span></button>
+        <div class="notif-panel" id="notifPanel">
+          <div class="notif-header"><span>Уведомления</span><button class="notif-mark-all" id="notifMarkAll">Отметить все прочитанными</button></div>
+          <div id="notifList"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="crmScreen" class="screen active crm-layout">
+    <aside class="sidebar">
+      <div class="filters">
+        <input id="searchInput" placeholder="Поиск по имени" />
+        <select id="teamFilter"></select>
+        <select id="availabilityFilter"></select>
+        <select id="sortSelect">
+          <option value="name">Сортировка: имя</option>
+          <option value="review">Сортировка: дата пересмотра ФОТ</option>
+          <option value="load">Сортировка: загрузка</option>
+        </select>
+        <div style="display:flex; gap:8px;">
+          <button id="addEmployee" class="primary">Добавить сотрудника</button>
+          <button id="importEmployees">Импорт из Excel</button>
+        </div>
+      </div>
+      <div id="teamCounters" class="team-counters"></div>
+      <div id="employeeList" class="employee-list"></div>
+    </aside>
+    <main class="main">
+      <div id="employeePanel" class="panel"></div>
+    </main>
+  </div>
+
+  <div id="dashboardScreen" class="screen">
+    <div id="dashboardBody" class="stats"></div>
+  </div>
+  <div id="calendarScreen" class="screen">
+    <div id="calendarBody" class="calendar-screen"></div>
+  </div>
+  <div id="developmentScreen" class="screen">
+    <div id="developmentBody" class="stats"></div>
+  </div>
+  <div id="settingsScreen" class="screen">
+    <div id="settingsBody" class="settings-layout"></div>
+  </div>
+
+  <input id="importFileInput" type="file" accept=".xlsx,.csv" style="display:none;" />
+  <div id="importModal" class="import-modal">
+    <div class="import-card">
+      <div class="section-title">Импорт сотрудников</div>
+      <div id="importMeta" class="muted">Файл не выбран</div>
+      <div id="importMapping" class="grid-3"></div>
+      <div class="section-title">Превью (первые 5 строк)</div>
+      <div id="importPreview"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button id="cancelImport">Отмена</button>
+        <button id="confirmImport" class="primary">Импортировать</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    const STORAGE_KEY = "staff_crm_v1";
+    const TEAM_STORAGE_KEY = "staff_crm_teams_v1";
+    const NOTIF_READ_KEY = "staff_crm_notif_read_v1";
+
+    const tabs = [
+      { id: "main", title: "1. Основная информация" },
+      { id: "load", title: "2. Загрузка" },
+      { id: "skills", title: "3. Навыки" },
+      { id: "projects", title: "4. История проектов" },
+      { id: "extra", title: "5. Дополнительно" },
+      { id: "tasks", title: "6. Задачи" },
+      { id: "onetoone", title: "7. 1-on-1" },
+      { id: "goals", title: "8. Цели" }
+    ];
+    const gradeOptions = ["Junior", "Middle", "Senior", "Lead", "Principal"];
+    const availabilityOptions = ["доступен", "частично", "недоступен"];
+    const goalPeriodOptions = ["Q1 2025", "Q2 2025", "Q3 2025", "Q4 2025", "2025 год", "2026 год"];
+
+    const state = {
+      employees: [],
+      selectedId: null,
+      activeTab: "main",
+      filters: { search: "", team: "all", availability: "all", sort: "name" },
+      screen: "crm",
+      teams: [],
+      importDraft: null
+    };
+
+    // ---- NOTIFICATIONS ----
+    let readNotifIds = new Set();
+
+    function loadReadNotifs() {
+      try {
+        const raw = localStorage.getItem(NOTIF_READ_KEY);
+        readNotifIds = new Set(raw ? JSON.parse(raw) : []);
+      } catch(e) { readNotifIds = new Set(); }
+    }
+    function saveReadNotifs() {
+      localStorage.setItem(NOTIF_READ_KEY, JSON.stringify([...readNotifIds]));
+    }
+
+    function buildNotifications() {
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0, 10);
+      const in7days = new Date(today.getTime() + 7*24*60*60*1000);
+      const in14days = new Date(today.getTime() + 14*24*60*60*1000);
+      const notifs = [];
+
+      state.employees.forEach(e => {
+        const name = e.fullName;
+
+        // RED: ФОТ просрочен > 12 мес
+        const months = monthDiff(e.salaryReviewDate);
+        if (months > 12) {
+          notifs.push({ id: `fot-overdue-${e.id}`, color: 'red', text: `Пересмотр ФОТ просрочен — ${months} мес без изменений`, employee: name, empId: e.id, tab: 'projects' });
+        }
+
+        // RED: просроченные задачи
+        (e.tasks || []).forEach((t, i) => {
+          if (t.status !== 'выполнена' && t.due && t.due < todayStr) {
+            notifs.push({ id: `task-overdue-${e.id}-${i}`, color: 'red', text: `Просроченная задача: «${t.text}» (${t.due})`, employee: name, empId: e.id, tab: 'tasks' });
+          }
+        });
+
+        // RED: просроченные ИПР
+        (e.development || []).forEach((d, i) => {
+          if (d.status !== 'выполнено' && d.deadline && d.deadline < todayStr) {
+            notifs.push({ id: `ipr-overdue-${e.id}-${i}`, color: 'red', text: `Просроченная зона развития: «${d.zone}» (срок ${d.deadline})`, employee: name, empId: e.id, tab: 'skills' });
+          }
+        });
+
+        // RED: высокий риск без комментария
+        if (e.risk && e.risk.level === 'высокий' && !e.risk.comment) {
+          notifs.push({ id: `risk-no-comment-${e.id}`, color: 'red', text: `Высокий риск увольнения без комментария`, employee: name, empId: e.id, tab: 'extra' });
+        }
+
+        // YELLOW: ФОТ через 1-3 месяца
+        if (months >= 9 && months <= 12) {
+          notifs.push({ id: `fot-soon-${e.id}`, color: 'yellow', text: `Пересмотр ФОТ скоро — прошло ${months} мес`, employee: name, empId: e.id, tab: 'projects' });
+        }
+
+        // YELLOW: задача истекает через 7 дней
+        (e.tasks || []).forEach((t, i) => {
+          if (t.status !== 'выполнена' && t.due && t.due >= todayStr) {
+            const d = new Date(t.due);
+            if (d <= in7days) {
+              notifs.push({ id: `task-soon-${e.id}-${i}`, color: 'yellow', text: `Задача истекает через 7 дней: «${t.text}» (${t.due})`, employee: name, empId: e.id, tab: 'tasks' });
+            }
+          }
+        });
+
+        // YELLOW: отпуск через 7 дней
+        (e.load.vacations || []).forEach((v, i) => {
+          if (v.from && v.from >= todayStr) {
+            const d = new Date(v.from);
+            if (d <= in7days) {
+              notifs.push({ id: `vac-soon-${e.id}-${i}`, color: 'yellow', text: `Уходит в отпуск через 7 дней (${v.from})`, employee: name, empId: e.id, tab: 'load' });
+            }
+          }
+        });
+
+        // YELLOW: 1-on-1 не проводился > 30 дней
+        const lastMeeting = e.oneOnOne && e.oneOnOne.history && e.oneOnOne.history[0] && e.oneOnOne.history[0].date ? e.oneOnOne.history[0].date : null;
+        if (lastMeeting) {
+          const daysSince = Math.floor((today - new Date(lastMeeting)) / (1000*60*60*24));
+          if (daysSince > 30) {
+            notifs.push({ id: `o2o-overdue-${e.id}`, color: 'yellow', text: `1-on-1 не проводился ${daysSince} дней (последний ${lastMeeting})`, employee: name, empId: e.id, tab: 'onetoone' });
+          }
+        } else {
+          notifs.push({ id: `o2o-never-${e.id}`, color: 'yellow', text: `1-on-1 ещё не проводился`, employee: name, empId: e.id, tab: 'onetoone' });
+        }
+
+        // BLUE: день рождения сегодня
+        if (e.birthday) {
+          const bd = new Date(e.birthday);
+          if (!isNaN(bd.getTime())) {
+            if (bd.getDate() === today.getDate() && bd.getMonth() === today.getMonth()) {
+              notifs.push({ id: `bday-${e.id}-${today.getFullYear()}`, color: 'blue', text: `🎂 Сегодня день рождения!`, employee: name, empId: e.id, tab: 'main' });
+            }
+          }
+        }
+
+        // BLUE: годовщина работы
+        if (e.hireDate) {
+          const hd = new Date(e.hireDate);
+          if (!isNaN(hd.getTime())) {
+            if (hd.getDate() === today.getDate() && hd.getMonth() === today.getMonth() && hd.getFullYear() !== today.getFullYear()) {
+              const years = today.getFullYear() - hd.getFullYear();
+              notifs.push({ id: `anniv-${e.id}-${today.getFullYear()}`, color: 'blue', text: `🎉 Годовщина — ${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'} в компании!`, employee: name, empId: e.id, tab: 'main' });
+            }
+          }
+        }
+
+        // BLUE: запланированный 1-on-1 сегодня
+        if (e.oneOnOne && e.oneOnOne.nextDate === todayStr) {
+          notifs.push({ id: `o2o-today-${e.id}`, color: 'blue', text: `1-on-1 запланирован сегодня`, employee: name, empId: e.id, tab: 'onetoone' });
+        }
+      });
+
+      return notifs;
+    }
+
+    function renderBell() {
+      const notifs = buildNotifications();
+      const unread = notifs.filter(n => !readNotifIds.has(n.id));
+      const badge = document.getElementById('bellBadge');
+      badge.textContent = unread.length > 9 ? '9+' : unread.length;
+      badge.classList.toggle('visible', unread.length > 0);
+
+      const list = document.getElementById('bellList');
+      if (!notifs.length) {
+        list.innerHTML = '<div class="notif-empty">Нет уведомлений</div>';
+        return;
+      }
+
+      const sorted = [...notifs].sort((a, b) => {
+        const order = { red: 0, yellow: 1, blue: 2 };
+        const readDiff = (readNotifIds.has(a.id) ? 1 : 0) - (readNotifIds.has(b.id) ? 1 : 0);
+        if (readDiff !== 0) return readDiff;
+        return (order[a.color] || 0) - (order[b.color] || 0);
+      });
+
+      list.innerHTML = sorted.map(n => {
+        const read = readNotifIds.has(n.id);
+        return `<div class="notif-item${read ? ' read' : ''}" data-notif-id="${n.id}" data-emp-id="${n.empId}" data-tab="${n.tab}">
+          <div class="notif-dot ${n.color}"></div>
+          <div class="notif-body">
+            <div class="notif-text">${escapeHtml(n.text)}</div>
+            <div class="notif-meta">${escapeHtml(n.employee)}</div>
+          </div>
+          <button class="notif-read-btn" data-mark-read="${n.id}">${read ? '✓' : 'Прочитано'}</button>
+        </div>`;
+      }).join('');
+    }
+
+    function markNotifRead(id) {
+      readNotifIds.add(id);
+      saveReadNotifs();
+      renderBell();
+    }
+
+    function markAllRead() {
+      const notifs = buildNotifications();
+      notifs.forEach(n => readNotifIds.add(n.id));
+      saveReadNotifs();
+      renderBell();
+    }
+
+    // Bell toggle
+    document.getElementById('bellBtn').addEventListener('click', e => {
+      e.stopPropagation();
+      document.getElementById('bellDropdown').classList.toggle('open');
+    });
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.bell-wrap')) {
+        document.getElementById('bellDropdown').classList.remove('open');
+      }
+    });
+    document.getElementById('bellMarkAll').addEventListener('click', e => {
+      e.stopPropagation();
+      markAllRead();
+    });
+    document.addEventListener('click', e => {
+      const markBtn = e.target.closest('[data-mark-read]');
+      if (markBtn) { e.stopPropagation(); markNotifRead(markBtn.getAttribute('data-mark-read')); return; }
+      const notifItem = e.target.closest('.notif-item[data-emp-id]');
+      if (notifItem && !e.target.closest('[data-mark-read]')) {
+        const empId = notifItem.getAttribute('data-emp-id');
+        const tab = notifItem.getAttribute('data-tab');
+        const notifId = notifItem.getAttribute('data-notif-id');
+        markNotifRead(notifId);
+        state.selectedId = empId;
+        state.activeTab = tab || 'main';
+        state.screen = 'crm';
+        document.getElementById('bellDropdown').classList.remove('open');
+        saveState();
+        renderAll();
+      }
+    });
+
+    // ---- HELPERS ----
+    function uid() { return Math.random().toString(36).slice(2, 10); }
+    function defaultTeamColor(i) {
+      const colors = ["#2563eb","#7c3aed","#0891b2","#059669","#d97706","#dc2626","#db2777","#0ea5e9"];
+      return colors[i % colors.length];
+    }
+    function ensureTeamsFromEmployees() {
+      if (!Array.isArray(state.teams) || !state.teams.length) {
+        const names = [...new Set((state.employees || []).map(e => e.team || "Без команды"))];
+        state.teams = names.map((name, i) => ({ id: uid(), name, color: defaultTeamColor(i) }));
+      }
+      if (!state.teams.some(t => t.name === "Без команды")) {
+        state.teams.unshift({ id: uid(), name: "Без команды", color: "#6b7280" });
+      }
+    }
+    function saveTeams() { localStorage.setItem(TEAM_STORAGE_KEY, JSON.stringify(state.teams || [])); }
+    function loadTeams() {
+      try {
+        const raw = localStorage.getItem(TEAM_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        state.teams = Array.isArray(parsed) ? parsed : [];
+      } catch(e) { state.teams = []; }
+      ensureTeamsFromEmployees();
+      saveTeams();
+    }
+    function teamNames() { ensureTeamsFromEmployees(); return state.teams.map(t => t.name); }
+    function monthDiff(dateStr) {
+      if (!dateStr) return 0;
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 0;
+      const now = new Date();
+      return (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+    }
+    function tenure(dateStr) {
+      const m = Math.max(0, monthDiff(dateStr));
+      return Math.floor(m/12) + " г " + (m%12) + " мес";
+    }
+    function avatarColor(name) {
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      return "hsl(" + Math.abs(hash) % 360 + " 65% 48%)";
+    }
+    function initials(fullName) {
+      return fullName.split(" ").filter(Boolean).slice(0,2).map(x => x[0]||"").join("").toUpperCase() || "??";
+    }
+    function escapeHtml(v) {
+      return String(v ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+    }
+    function reviewAlertClass(months) {
+      if (months > 12) return "danger";
+      if (months > 9) return "warn";
+      return "";
+    }
+    function isCurrentInRange(period) {
+      if (!period || !period.from || !period.to) return false;
+      const now = new Date();
+      return now >= new Date(period.from) && now <= new Date(period.to);
+    }
+    function currentGoalPeriod() {
+      const now = new Date();
+      const y = now.getFullYear();
+      if (y <= 2025) return "Q" + (Math.floor(now.getMonth()/3)+1) + " 2025";
+      return y + " год";
+    }
+    function startOfWeek(date) {
+      const d = new Date(date);
+      d.setHours(0,0,0,0);
+      d.setDate(d.getDate() - ((d.getDay()+6)%7));
+      return d;
+    }
+    function daysInMonth(year, month) { return new Date(year, month+1, 0).getDate(); }
+    function overlapsPeriod(fromA, toA, fromB, toB) { return fromA <= toB && toA >= fromB; }
+    function ensureOneOnOneShape(e) {
+      if (!e.oneOnOne) e.oneOnOne = { nextDate:"", prepNotes:"", history:[], agendaChecklist:{feedback:false,goals:false,load:false,growth:false,wellbeing:false}, agendaExtra:"" };
+      if (!e.oneOnOne.history) e.oneOnOne.history = [];
+      if (!e.oneOnOne.agendaChecklist) e.oneOnOne.agendaChecklist = {feedback:false,goals:false,load:false,growth:false,wellbeing:false};
+      if (typeof e.oneOnOne.agendaExtra !== "string") e.oneOnOne.agendaExtra = "";
+      if (typeof e.oneOnOne.prepNotes !== "string") e.oneOnOne.prepNotes = "";
+      if (typeof e.oneOnOne.nextDate !== "string") e.oneOnOne.nextDate = "";
+    }
+    function ensureGoalsFields(e) {
+      if (!e.goalsCurrentPeriod) e.goalsCurrentPeriod = currentGoalPeriod();
+      if (!Array.isArray(e.goals)) e.goals = [];
+      if (!e.goalsSummary) e.goalsSummary = { score:3, comment:"", date:"" };
+    }
+    function ensureEmployeeTeamHistory(e) {
+      if (!Array.isArray(e.teamHistory)) e.teamHistory = [];
+    }
+
+    function createDemoData() {
+      return [
+        { id:uid(), fullName:"Иван Петров", role:"Руководитель разработки", team:"Core Platform", hireDate:"2021-02-15", salaryReviewDate:"2025-03-01", salary:420000, employeeNumber:"EMP-001", positionId:"POS-LEAD-17", location:"Москва", email:"i.petrov@corp.local", teams:"@ivan.petrov", telegram:"@ipetrov", grade:"Lead", birthday:"1988-03-21",
+          load:{ currentDays:17, currentPercent:85, capacityMonth:20, status:"частично", nextMonthPlan:75, vacations:[{from:"2026-05-10",to:"2026-05-20"}], sickLeaves:[{from:"2026-01-16",to:"2026-01-19"}], projects:["CRM трансформация","Единая платформа отчётности"] },
+          skills:[{name:"People management",level:5,comment:"Сильная фасилитация"},{name:"System design",level:4,comment:"Глубокое понимание архитектуры"}],
+          development:[{zone:"Финансовое планирование",activities:"Курс + шэдоуинг",deadline:"2026-07-01",mentor:"Ольга Соколова",status:"в работе"}],
+          managerRating:{score:5,comment:"Стабильно высокий результат, лидер команды."},
+          projectHistory:[{period:"2024 Q3-Q4",project:"SRE uplift",role:"Delivery lead",result:"Снизил инциденты на 35%"}],
+          salaryHistory:[{date:"2025-03-01",from:380000,to:420000,reason:"Расширение зоны ответственности"}],
+          hobbies:"Бег, горы, шахматы", managerComments:[{date:"2026-03-10",text:"На 1-on-1 обсудили делегирование."}],
+          documents:[{title:"План развития",url:"https://example.com/plan-ivan"}],
+          risk:{level:"низкий",comment:"Высокая вовлечённость."}, promotionReadiness:"готов сейчас", workPreference:"гибрид",
+          tasks:[{text:"Провести 1-on-1",due:"2026-03-28",status:"открыта"}] },
+        { id:uid(), fullName:"Мария Смирнова", role:"Senior Backend Engineer", team:"Payments Stream", hireDate:"2020-08-03", salaryReviewDate:"2024-12-01", salary:310000, employeeNumber:"EMP-002", positionId:"POS-SR-02", location:"Санкт-Петербург", email:"m.smirnova@corp.local", teams:"@maria.smirnova", telegram:"@maria_s", grade:"Senior", birthday:"",
+          load:{ currentDays:20, currentPercent:100, capacityMonth:20, status:"доступен", nextMonthPlan:90, vacations:[{from:"2026-08-01",to:"2026-08-14"}], sickLeaves:[], projects:["Миграция платёжного ядра"] },
+          skills:[{name:"Java/Kotlin",level:5,comment:"Экспертный уровень"},{name:"Mentoring",level:4,comment:"Ведёт двух мидлов"}],
+          development:[{zone:"Архитектурное лидерство",activities:"Ведение дизайн-ревью",deadline:"2026-09-15",mentor:"Иван Петров",status:"в работе"}],
+          managerRating:{score:4,comment:"Очень сильный инженер, растёт как техлид."},
+          projectHistory:[{period:"2025 H1",project:"Антифрод 2.0",role:"Lead developer",result:"Сократила false-positive на 18%"}],
+          salaryHistory:[{date:"2024-12-01",from:280000,to:310000,reason:"Рыночная корректировка"}],
+          hobbies:"Йога, литература", managerComments:[{date:"2026-02-20",text:"Нужна поддержка по ворклоаду."}],
+          documents:[{title:"Skill matrix",url:"https://example.com/skills-maria"}],
+          risk:{level:"средний",comment:"Высокая нагрузка последний квартал."}, promotionReadiness:"в перспективе", workPreference:"удалённо",
+          tasks:[{text:"Обсудить повышение",due:"2026-04-02",status:"открыта"}] },
+        { id:uid(), fullName:"Алексей Волков", role:"Product Analyst", team:"Growth Stream", hireDate:"2022-06-10", salaryReviewDate:"2025-05-10", salary:240000, employeeNumber:"EMP-003", positionId:"POS-AN-11", location:"Казань", email:"a.volkov@corp.local", teams:"@alex.volkov", telegram:"@volkov_analytics", grade:"Middle", birthday:"",
+          load:{ currentDays:13, currentPercent:65, capacityMonth:20, status:"доступен", nextMonthPlan:70, vacations:[{from:"2026-04-15",to:"2026-04-22"}], sickLeaves:[], projects:["A/B платформа","Retention dashboard"] },
+          skills:[{name:"SQL",level:5,comment:"Сильный аналитик"},{name:"Product thinking",level:4,comment:"Хорошо формирует гипотезы"}],
+          development:[{zone:"Презентации для C-level",activities:"Курс сторителлинга",deadline:"2026-06-20",mentor:"Елена Котова",status:"в работе"}],
+          managerRating:{score:4,comment:"Стабильно закрывает аналитические задачи."},
+          projectHistory:[{period:"2025 Q4",project:"North Star метрики",role:"Analyst",result:"Сформировал единую воронку метрик"}],
+          salaryHistory:[{date:"2025-05-10",from:215000,to:240000,reason:"Повышение грейда"}],
+          hobbies:"Плавание, кино", managerComments:[{date:"2026-03-02",text:"Запросил менторство по презентациям."}],
+          documents:[{title:"Q1 review",url:"https://example.com/q1-alex"}],
+          risk:{level:"низкий",comment:"Стабильная мотивация."}, promotionReadiness:"в перспективе", workPreference:"гибрид",
+          tasks:[{text:"Дать обратную связь по презентации",due:"2026-03-26",status:"открыта"}] },
+        { id:uid(), fullName:"Екатерина Морозова", role:"QA Lead", team:"Core Platform", hireDate:"2019-11-01", salaryReviewDate:"2024-10-15", salary:295000, employeeNumber:"EMP-004", positionId:"POS-QA-LEAD", location:"Новосибирск", email:"e.morozova@corp.local", teams:"@ekaterina.qa", telegram:"@kat_qa", grade:"Lead", birthday:"",
+          load:{ currentDays:19, currentPercent:95, capacityMonth:20, status:"частично", nextMonthPlan:80, vacations:[{from:"2026-03-15",to:"2026-03-23"}], sickLeaves:[], projects:["Тестовая стратегия платформы","Автоматизация регрессии"] },
+          skills:[{name:"Test automation",level:5,comment:"Эксперт по e2e"},{name:"Leadership",level:4,comment:"Сильный QA-лид"}],
+          development:[{zone:"Performance testing",activities:"Внедрение k6 практик",deadline:"2026-08-30",mentor:"Иван Петров",status:"в работе"}],
+          managerRating:{score:5,comment:"Высокая надёжность и качество релизов."},
+          projectHistory:[{period:"2025",project:"Quality Gates",role:"Owner",result:"Сократила дефекты в проде на 22%"}],
+          salaryHistory:[{date:"2024-10-15",from:260000,to:295000,reason:"Пересмотр ФОТ по результатам года"}],
+          hobbies:"Путешествия, скетчинг", managerComments:[{date:"2026-03-18",text:"Сейчас в отпуске, передала критичные задачи."}],
+          documents:[{title:"QA roadmap",url:"https://example.com/qa-roadmap"}],
+          risk:{level:"низкий",comment:"Надёжный ключевой сотрудник."}, promotionReadiness:"готов сейчас", workPreference:"удалённо",
+          tasks:[{text:"Обсудить ресурсный план QA",due:"2026-03-29",status:"открыта"}] },
+        { id:uid(), fullName:"Дмитрий Кузнецов", role:"Frontend Engineer", team:"Growth Stream", hireDate:"2023-01-20", salaryReviewDate:"2025-06-01", salary:205000, employeeNumber:"EMP-005", positionId:"POS-FE-09", location:"Екатеринбург", email:"d.kuznetsov@corp.local", teams:"@dima.front", telegram:"@dima_fe", grade:"Middle", birthday:"",
+          load:{ currentDays:10, currentPercent:50, capacityMonth:20, status:"доступен", nextMonthPlan:65, vacations:[], sickLeaves:[{from:"2026-03-20",to:"2026-03-24"}], projects:["Новый onboarding flow"] },
+          skills:[{name:"React",level:4,comment:"Уверенный middle"},{name:"Accessibility",level:3,comment:"Есть прогресс"}],
+          development:[{zone:"System design FE",activities:"Архитектурные RFC",deadline:"2026-11-01",mentor:"Мария Смирнова",status:"в работе"}],
+          managerRating:{score:3,comment:"Хороший темп, нужен рост по качеству."},
+          projectHistory:[{period:"2025 Q2-Q3",project:"Loyalty UI",role:"Frontend dev",result:"Сократил TTI на 27%"}],
+          salaryHistory:[{date:"2025-06-01",from:185000,to:205000,reason:"Годовой пересмотр"}],
+          hobbies:"Гитара, футбол", managerComments:[{date:"2026-03-21",text:"На больничном до 24 марта."}],
+          documents:[{title:"Frontend goals",url:"https://example.com/fe-goals"}],
+          risk:{level:"высокий",comment:"Есть интерес к внешним предложениям."}, promotionReadiness:"не готов", workPreference:"офис",
+          tasks:[{text:"Согласовать план развития на 6 мес",due:"2026-03-24",status:"открыта"}] }
+      ];
+    }
+
+    const NOTIF_READ_KEY = "staff_crm_notif_read_v1";
+    let readNotifIds = new Set();
+    function loadReadNotifs(){ try{ readNotifIds=new Set(JSON.parse(localStorage.getItem(NOTIF_READ_KEY)||"[]")); }catch(e){ readNotifIds=new Set(); } }
+    function saveReadNotifs(){ localStorage.setItem(NOTIF_READ_KEY,JSON.stringify([...readNotifIds])); }
+
+    function buildNotifications(){
+      const today=new Date(); const todayStr=today.toISOString().slice(0,10);
+      const in7=new Date(today.getTime()+7*24*60*60*1000).toISOString().slice(0,10);
+      const notifs=[];
+      state.employees.forEach(e=>{
+        const name=e.fullName; const id=e.id;
+        const fotMonths=monthDiff(e.salaryReviewDate);
+        if(fotMonths>12) notifs.push({id:"fot-overdue-"+id,color:"red",text:"Пересмотр ФОТ просрочен",sub:name+" — "+fotMonths+" мес. без пересмотра",empId:id,tab:"main"});
+        (e.tasks||[]).forEach((t,i)=>{ if(t.status!=="выполнена"&&t.due&&t.due<todayStr) notifs.push({id:"task-overdue-"+id+"-"+i,color:"red",text:"Просрочена задача",sub:name+": «"+t.text+"» — срок "+t.due,empId:id,tab:"tasks"}); });
+        (e.development||[]).forEach((d,i)=>{ if(d.status!=="выполнено"&&d.deadline&&d.deadline<todayStr) notifs.push({id:"dev-overdue-"+id+"-"+i,color:"red",text:"Просрочена зона развития",sub:name+": «"+d.zone+"»",empId:id,tab:"skills"}); });
+        if(e.risk&&e.risk.level==="высокий"&&!(e.risk.comment||"").trim()) notifs.push({id:"risk-nocomment-"+id,color:"red",text:"Высокий риск увольнения без комментария",sub:name,empId:id,tab:"extra"});
+        if(fotMonths>=9&&fotMonths<=12) notifs.push({id:"fot-soon-"+id,color:"yellow",text:"Скоро пересмотр ФОТ",sub:name+" — "+fotMonths+" мес.",empId:id,tab:"main"});
+        (e.tasks||[]).forEach((t,i)=>{ if(t.status!=="выполнена"&&t.due&&t.due>=todayStr&&t.due<=in7) notifs.push({id:"task-soon-"+id+"-"+i,color:"yellow",text:"Задача истекает через 7 дней",sub:name+": «"+t.text+"» — срок "+t.due,empId:id,tab:"tasks"}); });
+        (e.load.vacations||[]).forEach((v,i)=>{ if(v.from&&v.from>=todayStr&&v.from<=in7) notifs.push({id:"vac-soon-"+id+"-"+i,color:"yellow",text:"Сотрудник уходит в отпуск через 7 дней",sub:name+" — с "+v.from,empId:id,tab:"load"}); });
+        const lastOoo=(e.oneOnOne&&e.oneOnOne.history&&e.oneOnOne.history[0])?e.oneOnOne.history[0].date:"";
+        const daysSinceOoo=lastOoo?Math.floor((today-new Date(lastOoo))/(1000*60*60*24)):9999;
+        if(daysSinceOoo>30) notifs.push({id:"ooo-overdue-"+id,color:"yellow",text:"1-on-1 не проводился более 30 дней",sub:name+" — "+(daysSinceOoo===9999?"история пустая":daysSinceOoo+" дней назад"),empId:id,tab:"onetoone"});
+        if(e.birthday){ const bd=e.birthday.slice(5); if(todayStr.slice(5)===bd) notifs.push({id:"birthday-"+id,color:"blue",text:"День рождения сегодня! 🎂",sub:name,empId:id,tab:"main"}); }
+        if(e.hireDate){ const hd=e.hireDate.slice(5); if(todayStr.slice(5)===hd){ const yrs=Math.floor(monthDiff(e.hireDate)/12); if(yrs>0) notifs.push({id:"anniversary-"+id,color:"blue",text:"Годовщина работы 🎉 "+yrs+" "+(yrs===1?"год":yrs<5?"года":"лет"),sub:name,empId:id,tab:"main"}); } }
+        if(e.oneOnOne&&e.oneOnOne.nextDate===todayStr) notifs.push({id:"ooo-today-"+id,color:"blue",text:"Запланирован 1-on-1 сегодня",sub:name,empId:id,tab:"onetoone"});
+      });
+      const order={red:0,yellow:1,blue:2};
+      notifs.sort((a,b)=>{ const ra=readNotifIds.has(a.id)?1:0; const rb=readNotifIds.has(b.id)?1:0; if(ra!==rb) return ra-rb; return (order[a.color]||2)-(order[b.color]||2); });
+      return notifs;
+    }
+
+    function renderNotifications(){
+      const notifs=buildNotifications();
+      const unread=notifs.filter(n=>!readNotifIds.has(n.id));
+      const badge=document.getElementById("notifCount");
+      if(unread.length>0){badge.textContent=unread.length>99?"99+":unread.length;badge.classList.remove("hidden");}
+      else{badge.classList.add("hidden");}
+      const list=document.getElementById("notifList");
+      if(!notifs.length){list.innerHTML='<div class="notif-empty">Нет уведомлений — всё в порядке ✓</div>';return;}
+      list.innerHTML=notifs.map(n=>{ const isRead=readNotifIds.has(n.id); return '<div class="notif-item'+(isRead?' read':'')+'" data-notif-id="'+n.id+'" data-notif-emp="'+n.empId+'" data-notif-tab="'+(n.tab||'main')+'">'+'<div class="notif-dot '+n.color+'"></div><div class="notif-body"><div class="notif-text">'+escapeHtml(n.text)+'</div><div class="notif-sub">'+escapeHtml(n.sub)+'</div></div><button class="notif-read-btn" data-mark-read="'+n.id+'" title="Отметить прочитанным">✓</button></div>'; }).join("");
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) {
+        state.employees = createDemoData();
+        state.employees.forEach(ensureOneOnOneShape);
+        state.employees.forEach(ensureEmployeeTeamHistory);
+        state.selectedId = state.employees[0].id;
+        saveState(); return;
+      }
+      try {
+        const parsed = JSON.parse(raw);
+        state.employees = parsed.employees || createDemoData();
+        state.employees.forEach(ensureOneOnOneShape);
+        state.employees.forEach(ensureEmployeeTeamHistory);
+        state.selectedId = parsed.selectedId || (state.employees[0] && state.employees[0].id);
+      } catch(e) {
+        state.employees = createDemoData();
+        state.employees.forEach(ensureOneOnOneShape);
+        state.employees.forEach(ensureEmployeeTeamHistory);
+        state.selectedId = state.employees[0].id;
+      }
+    }
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees: state.employees, selectedId: state.selectedId }));
+    }
+    function selectedEmployee() { return state.employees.find(e => e.id === state.selectedId) || null; }
+    function filteredEmployees() {
+      const q = state.filters.search.trim().toLowerCase();
+      let arr = state.employees.filter(e => {
+        const mSearch = !q || e.fullName.toLowerCase().includes(q);
+        const mTeam = state.filters.team === "all" || e.team === state.filters.team;
+        const mStatus = state.filters.availability === "all" || e.load.status === state.filters.availability;
+        return mSearch && mTeam && mStatus;
+      });
+      if (state.filters.sort === "name") arr.sort((a,b) => a.fullName.localeCompare(b.fullName,"ru"));
+      if (state.filters.sort === "review") arr.sort((a,b) => new Date(a.salaryReviewDate)-new Date(b.salaryReviewDate));
+      if (state.filters.sort === "load") arr.sort((a,b) => b.load.currentPercent-a.load.currentPercent);
+      return arr;
+    }
+
+    function renderTeamFilter() {
+      ensureTeamsFromEmployees();
+      const teams = teamNames().sort((a,b) => a.localeCompare(b,"ru"));
+      const tf = document.getElementById("teamFilter");
+      tf.innerHTML = '<option value="all">Все команды/стримы</option>' + teams.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join("");
+      tf.value = state.filters.team;
+      const af = document.getElementById("availabilityFilter");
+      af.innerHTML = '<option value="all">Все статусы доступности</option>' + availabilityOptions.map(s => `<option value="${s}">${s}</option>`).join("");
+      af.value = state.filters.availability;
+    }
+    function renderTeamCounters() {
+      const map = {};
+      state.employees.forEach(e => { map[e.team] = (map[e.team]||0)+1; });
+      document.getElementById("teamCounters").innerHTML = Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0],"ru")).map(([team,count])=>`<span class="chip">${escapeHtml(team)}: ${count}</span>`).join("");
+    }
+    function renderEmployeeList() {
+      const list = document.getElementById("employeeList");
+      const arr = filteredEmployees();
+      if (!arr.length) { list.innerHTML = '<div class="empty">Сотрудники не найдены.</div>'; return; }
+      list.innerHTML = arr.map(e => {
+        const m = monthDiff(e.salaryReviewDate);
+        const alertClass = reviewAlertClass(m);
+        return `<div class="employee-card ${e.id===state.selectedId?"active":""}" data-emp-card="${e.id}">
+          <div class="avatar" style="background:${avatarColor(e.fullName)}">${initials(e.fullName)}</div>
+          <div>
+            <div class="emp-name">${escapeHtml(e.fullName)}</div>
+            <div class="muted">${escapeHtml(e.role)} · ${escapeHtml(e.team)}</div>
+            <div class="muted">Загрузка: ${e.load.currentPercent}% (${e.load.currentDays} ЧД)</div>
+            <div class="loadbar"><span style="width:${Math.min(100,e.load.currentPercent)}%; background:${e.load.currentPercent>95?"#dc2626":e.load.currentPercent>80?"#d97706":"#059669"}"></span></div>
+            ${alertClass?`<div class="review-alert ${alertClass}">Пересмотр ФОТ: ${m} мес</div>`:""}
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    function inputField(label,key,value,type="text") {
+      return `<div class="field"><label>${label}</label><input data-field="${key}" type="${type}" value="${escapeHtml(value)}" /></div>`;
+    }
+    function selectField(label,key,value,options) {
+      return `<div class="field"><label>${label}</label><select data-field="${key}">${options.map(o=>`<option ${o===value?"selected":""}>${o}</option>`).join("")}</select></div>`;
+    }
+    function textAreaField(label,key,value) {
+      return `<div class="field"><label>${label}</label><textarea data-field="${key}">${escapeHtml(value)}</textarea></div>`;
+    }
+    function stars(level) {
+      const l = Math.max(1,Math.min(5,Number(level)||1));
+      return "●".repeat(l)+"○".repeat(5-l);
+    }
+    function tableFromRows(headers,rowsHtml,addBtnKey,addBtnText) {
+      return `<table><thead><tr>${headers.map(h=>"<th>"+h+"</th>").join("")}</tr></thead><tbody>${rowsHtml||`<tr><td colspan="${headers.length}" class="muted">Нет данных</td></tr>`}</tbody></table><button data-add-row="${addBtnKey}">${addBtnText}</button>`;
+    }
+
+    function renderEmployeePanel() {
+      const p = document.getElementById("employeePanel");
+      const e = selectedEmployee();
+      if (!e) { p.innerHTML = '<div class="empty">Выберите сотрудника слева.</div>'; return; }
+      const months = monthDiff(e.salaryReviewDate);
+      const tabBtns = `<div class="tabs">${tabs.map(t=>`<button class="tab-btn ${state.activeTab===t.id?"active":""}" data-tab="${t.id}">${t.title}</button>`).join("")}</div>`;
+      let content = "";
+
+      if (state.activeTab === "main") {
+        ensureEmployeeTeamHistory(e);
+        content = `<div class="grid-2">
+          ${inputField("ФИО","fullName",e.fullName)}
+          ${inputField("Должность","role",e.role)}
+          ${inputField("Команда/стрим","team",e.team)}
+          ${selectField("Грейд","grade",e.grade,gradeOptions)}
+          ${inputField("Дата приёма","hireDate",e.hireDate,"date")}
+          <div class="field"><label>Стаж</label><div class="calc">${tenure(e.hireDate)}</div></div>
+          ${inputField("Дата последнего пересмотра ФОТ","salaryReviewDate",e.salaryReviewDate,"date")}
+          <div class="field"><label>Прошло месяцев</label><div class="calc">${months}</div></div>
+          ${inputField("Текущий оклад","salary",e.salary,"number")}
+          ${inputField("Табельный номер","employeeNumber",e.employeeNumber)}
+          ${inputField("ID должности","positionId",e.positionId)}
+          ${inputField("Локация","location",e.location)}
+          ${inputField("Email","email",e.email,"email")}
+          ${inputField("Teams","teams",e.teams)}
+          ${inputField("Telegram","telegram",e.telegram)}
+          ${inputField("Дата рождения","birthday",e.birthday||"","date")}
+        </div>
+        <div class="section-title">История смены команд</div>
+        <table><thead><tr><th>Дата</th><th>Предыдущая команда</th><th>Новая команда</th><th>Причина</th></tr></thead><tbody>
+          ${e.teamHistory.map(h=>`<tr><td>${escapeHtml(h.date||"—")}</td><td>${escapeHtml(h.from||"—")}</td><td>${escapeHtml(h.to||"—")}</td><td>${escapeHtml(h.reason||"—")}</td></tr>`).join("")||`<tr><td colspan="4" class="muted">История пока пустая</td></tr>`}
+        </tbody></table>`;
+      }
+      if (state.activeTab === "load") {
+        content = `<div class="grid-3">
+          ${inputField("Текущая загрузка (ЧД)","load.currentDays",e.load.currentDays,"number")}
+          ${inputField("Текущая загрузка (%)","load.currentPercent",e.load.currentPercent,"number")}
+          ${inputField("Capacity (ЧД/мес)","load.capacityMonth",e.load.capacityMonth,"number")}
+          ${selectField("Статус доступности","load.status",e.load.status,availabilityOptions)}
+          ${inputField("План загрузки след. мес (%)","load.nextMonthPlan",e.load.nextMonthPlan,"number")}
+        </div>
+        <div class="section-title">Проекты/эпики</div>
+        ${tableFromRows(["Проект/эпик",""],e.load.projects.map((pr,i)=>`<tr><td><input data-list-item="load.projects.${i}" value="${escapeHtml(pr)}" /></td><td class="row-actions"><button data-del-row="project.${i}">Удалить</button></td></tr>`).join(""),"project","Добавить проект/эпик")}
+        <div class="section-title">Отпуск</div>
+        ${tableFromRows(["С","По",""],e.load.vacations.map((v,i)=>`<tr><td><input type="date" data-list-item="load.vacations.${i}.from" value="${v.from||""}" /></td><td><input type="date" data-list-item="load.vacations.${i}.to" value="${v.to||""}" /></td><td class="row-actions"><button data-del-row="vacation.${i}">Удалить</button></td></tr>`).join(""),"vacation","Добавить отпуск")}
+        <div class="section-title">Больничный</div>
+        ${tableFromRows(["С","По",""],e.load.sickLeaves.map((v,i)=>`<tr><td><input type="date" data-list-item="load.sickLeaves.${i}.from" value="${v.from||""}" /></td><td><input type="date" data-list-item="load.sickLeaves.${i}.to" value="${v.to||""}" /></td><td class="row-actions"><button data-del-row="sick.${i}">Удалить</button></td></tr>`).join(""),"sick","Добавить больничный")}`;
+      }
+      if (state.activeTab === "skills") {
+        content = `<div class="section-title">Навыки</div>
+        ${tableFromRows(["Навык","Уровень 1-5","Индикатор","Комментарий",""],e.skills.map((s,i)=>`<tr><td><input data-list-item="skills.${i}.name" value="${escapeHtml(s.name)}" /></td><td><input type="number" min="1" max="5" data-list-item="skills.${i}.level" value="${s.level}" /></td><td><span class="dots">${stars(s.level)}</span></td><td><input data-list-item="skills.${i}.comment" value="${escapeHtml(s.comment)}" /></td><td class="row-actions"><button data-del-row="skill.${i}">Удалить</button></td></tr>`).join(""),"skill","Добавить навык")}
+        <div class="section-title">Зоны развития / ИПР</div>
+        ${tableFromRows(["Зона","Активности","Срок","Наставник","Статус",""],e.development.map((d,i)=>`<tr><td><input data-list-item="development.${i}.zone" value="${escapeHtml(d.zone)}" /></td><td><input data-list-item="development.${i}.activities" value="${escapeHtml(d.activities)}" /></td><td><input type="date" data-list-item="development.${i}.deadline" value="${d.deadline||""}" /></td><td><input data-list-item="development.${i}.mentor" value="${escapeHtml(d.mentor)}" /></td><td><select data-list-item="development.${i}.status"><option ${d.status==="в работе"?"selected":""}>в работе</option><option ${d.status==="выполнено"?"selected":""}>выполнено</option></select></td><td class="row-actions"><button data-del-row="dev.${i}">Удалить</button></td></tr>`).join(""),"dev","Добавить зону")}
+        <div class="grid-2">
+          ${inputField("Общая оценка 1-5","managerRating.score",e.managerRating.score,"number")}
+          ${textAreaField("Комментарий руководителя","managerRating.comment",e.managerRating.comment)}
+        </div>`;
+      }
+      if (state.activeTab === "projects") {
+        content = `<div class="section-title">История проектов</div>
+        ${tableFromRows(["Период","Проект/инициатива","Роль","Результат/вклад",""],e.projectHistory.map((r,i)=>`<tr><td><input data-list-item="projectHistory.${i}.period" value="${escapeHtml(r.period)}" /></td><td><input data-list-item="projectHistory.${i}.project" value="${escapeHtml(r.project)}" /></td><td><input data-list-item="projectHistory.${i}.role" value="${escapeHtml(r.role)}" /></td><td><input data-list-item="projectHistory.${i}.result" value="${escapeHtml(r.result)}" /></td><td class="row-actions"><button data-del-row="ph.${i}">Удалить</button></td></tr>`).join(""),"ph","Добавить запись")}
+        <div class="section-title">История пересмотров ФОТ</div>
+        ${tableFromRows(["Дата","Было","Стало","% изм.","Причина",""],e.salaryHistory.map((r,i)=>{
+          const pct = r.from ? (((r.to-r.from)/r.from)*100).toFixed(1)+"%" : "0%";
+          return `<tr><td><input type="date" data-list-item="salaryHistory.${i}.date" value="${r.date||""}" /></td><td><input type="number" data-list-item="salaryHistory.${i}.from" value="${r.from||0}" /></td><td><input type="number" data-list-item="salaryHistory.${i}.to" value="${r.to||0}" /></td><td>${pct}</td><td><input data-list-item="salaryHistory.${i}.reason" value="${escapeHtml(r.reason)}" /></td><td class="row-actions"><button data-del-row="sh.${i}">Удалить</button></td></tr>`;
+        }).join(""),"sh","Добавить пересмотр ФОТ")}`;
+      }
+      if (state.activeTab === "extra") {
+        content = `<div class="grid-2">
+          ${textAreaField("Интересы и хобби","hobbies",e.hobbies)}
+          ${textAreaField("Комментарий по риску","risk.comment",e.risk.comment)}
+          ${selectField("Риск увольнения","risk.level",e.risk.level,["низкий","средний","высокий"])}
+          ${selectField("Готовность к повышению","promotionReadiness",e.promotionReadiness,["не готов","в перспективе","готов сейчас"])}
+          ${selectField("Предпочтение по работе","workPreference",e.workPreference,["офис","гибрид","удалённо"])}
+        </div>
+        <div class="section-title">Комментарии руководителя (новые сверху)</div>
+        ${tableFromRows(["Дата","Комментарий",""],e.managerComments.map((c,i)=>`<tr><td><input type="date" data-list-item="managerComments.${i}.date" value="${c.date||""}" /></td><td><input data-list-item="managerComments.${i}.text" value="${escapeHtml(c.text)}" /></td><td class="row-actions"><button data-del-row="mc.${i}">Удалить</button></td></tr>`).join(""),"mc","Добавить комментарий")}
+        <div class="section-title">Документы/ссылки</div>
+        ${tableFromRows(["Название","URL",""],e.documents.map((d,i)=>`<tr><td><input data-list-item="documents.${i}.title" value="${escapeHtml(d.title)}" /></td><td><input data-list-item="documents.${i}.url" value="${escapeHtml(d.url)}" /></td><td class="row-actions"><button data-del-row="doc.${i}">Удалить</button></td></tr>`).join(""),"doc","Добавить ссылку")}`;
+      }
+      if (state.activeTab === "tasks") {
+        const today = new Date().toISOString().slice(0,10);
+        content = `<div class="section-title">Персональные задачи руководителя</div>
+        ${tableFromRows(["Задача","Срок","Статус",""],e.tasks.map((t,i)=>{
+          const overdue = t.status!=="выполнена" && t.due && t.due<today;
+          return `<tr class="${overdue?"status-overdue":""}"><td><input data-list-item="tasks.${i}.text" value="${escapeHtml(t.text)}" /></td><td><input type="date" data-list-item="tasks.${i}.due" value="${t.due||""}" /></td><td><select data-list-item="tasks.${i}.status"><option ${t.status==="открыта"?"selected":""}>открыта</option><option ${t.status==="выполнена"?"selected":""}>выполнена</option></select></td><td class="row-actions"><button data-del-row="task.${i}">Удалить</button></td></tr>`;
+        }).join(""),"task","Добавить задачу")}
+        <div class="muted">Просроченные задачи подсвечены красным.</div>`;
+      }
+      if (state.activeTab === "onetoone") {
+        const lastHistoryDate = e.oneOnOne.history[0] && e.oneOnOne.history[0].date ? e.oneOnOne.history[0].date : "";
+        content = `<div class="section-title">Блок 1 — Следующая встреча</div>
+        <div class="grid-2">
+          ${inputField("Дата следующего 1-on-1","oneOnOne.nextDate",e.oneOnOne.nextDate,"date")}
+          <div class="field"><label>&nbsp;</label><button id="meetingDoneBtn" class="primary">Встреча состоялась</button></div>
+        </div>
+        ${textAreaField("Заметки для подготовки","oneOnOne.prepNotes",e.oneOnOne.prepNotes)}
+        <div class="section-title">Блок 2 — История встреч</div>
+        ${tableFromRows(["Дата","Темы","Заметки","Договорённости",""],e.oneOnOne.history.map((h,i)=>`<tr class="${i===0?"last-meeting-row":""}"><td><input type="date" data-list-item="oneOnOne.history.${i}.date" value="${h.date||""}" /></td><td><input data-list-item="oneOnOne.history.${i}.topics" value="${escapeHtml(h.topics||"")}" /></td><td><input data-list-item="oneOnOne.history.${i}.notes" value="${escapeHtml(h.notes||"")}" /></td><td><input data-list-item="oneOnOne.history.${i}.agreements" value="${escapeHtml(h.agreements||"")}" /></td><td class="row-actions"><button data-del-row="o2o.${i}">Удалить</button></td></tr>`).join(""),"o2o","Добавить запись вручную")}
+        ${lastHistoryDate?`<div class="muted">Последняя встреча: ${lastHistoryDate}</div>`:`<div class="muted">История встреч пока пустая</div>`}
+        <div class="section-title">Блок 3 — Повестка</div>
+        <table><thead><tr><th>Тема</th><th>Отметка</th></tr></thead><tbody>
+          <tr><td>Обратная связь</td><td><input type="checkbox" data-field="oneOnOne.agendaChecklist.feedback" ${e.oneOnOne.agendaChecklist.feedback?"checked":""}></td></tr>
+          <tr><td>Цели</td><td><input type="checkbox" data-field="oneOnOne.agendaChecklist.goals" ${e.oneOnOne.agendaChecklist.goals?"checked":""}></td></tr>
+          <tr><td>Загрузка</td><td><input type="checkbox" data-field="oneOnOne.agendaChecklist.load" ${e.oneOnOne.agendaChecklist.load?"checked":""}></td></tr>
+          <tr><td>Развитие</td><td><input type="checkbox" data-field="oneOnOne.agendaChecklist.growth" ${e.oneOnOne.agendaChecklist.growth?"checked":""}></td></tr>
+          <tr><td>Общее состояние</td><td><input type="checkbox" data-field="oneOnOne.agendaChecklist.wellbeing" ${e.oneOnOne.agendaChecklist.wellbeing?"checked":""}></td></tr>
+        </tbody></table>
+        ${textAreaField("Дополнительные темы","oneOnOne.agendaExtra",e.oneOnOne.agendaExtra)}`;
+      }
+      if (state.activeTab === "goals") {
+        ensureGoalsFields(e);
+        const currentPeriod = e.goalsCurrentPeriod || currentGoalPeriod();
+        const currentGoals = e.goals.map((g,i)=>({g,i})).filter(x=>(x.g.period||"")===currentPeriod);
+        const archiveMap = {};
+        e.goals.filter(g=>g.period&&g.period!==currentPeriod&&(g.status==="выполнена"||g.status==="отменена")).forEach(g=>{
+          if (!archiveMap[g.period]) archiveMap[g.period]=[];
+          archiveMap[g.period].push(g);
+        });
+        content = `<div class="section-title">Блок 1 — Текущие цели</div>
+        <div class="grid-2">${selectField("Период","goalsCurrentPeriod",currentPeriod,goalPeriodOptions)}</div>
+        ${tableFromRows(["Цель","Приоритет","Срок","Прогресс (0-100%)","Статус","Комментарий",""],currentGoals.map(x=>{
+          const progress=Math.max(0,Math.min(100,Number(x.g.progress)||0));
+          return `<tr><td><input data-list-item="goals.${x.i}.title" value="${escapeHtml(x.g.title||"")}" /></td><td><select data-list-item="goals.${x.i}.priority"><option ${x.g.priority==="высокий"?"selected":""}>высокий</option><option ${x.g.priority==="средний"?"selected":""}>средний</option><option ${x.g.priority==="низкий"?"selected":""}>низкий</option></select></td><td><input type="date" data-list-item="goals.${x.i}.due" value="${x.g.due||""}" /></td><td><input type="number" min="0" max="100" data-list-item="goals.${x.i}.progress" value="${progress}" /><div class="loadbar compact"><span style="width:${progress}%; background:${progress>=80?"#059669":progress>=40?"#d97706":"#dc2626"};"></span></div></td><td><select data-list-item="goals.${x.i}.status"><option ${x.g.status==="в работе"?"selected":""}>в работе</option><option ${x.g.status==="выполнена"?"selected":""}>выполнена</option><option ${x.g.status==="отменена"?"selected":""}>отменена</option></select></td><td><input data-list-item="goals.${x.i}.comment" value="${escapeHtml(x.g.comment||"")}" /></td><td class="row-actions"><button data-del-row="goal.${x.i}">Удалить</button></td></tr>`;
+        }).join(""),"goal","Добавить цель")}
+        <div class="section-title">Блок 2 — Архив целей</div>
+        ${Object.keys(archiveMap).length ? Object.keys(archiveMap).sort((a,b)=>b.localeCompare(a,"ru")).map(period=>`<div class="section-title"><span class="badge warn">${escapeHtml(period)}</span></div><table><thead><tr><th>Цель</th><th>Приоритет</th><th>Срок</th><th>Прогресс</th><th>Статус</th><th>Комментарий</th></tr></thead><tbody>${archiveMap[period].map(g=>`<tr><td>${escapeHtml(g.title||"—")}</td><td>${escapeHtml(g.priority||"—")}</td><td>${escapeHtml(g.due||"—")}</td><td>${Math.max(0,Math.min(100,Number(g.progress)||0))}%</td><td>${escapeHtml(g.status||"—")}</td><td>${escapeHtml(g.comment||"—")}</td></tr>`).join("")}</tbody></table>`).join("") : `<div class="muted">Нет архивных целей.</div>`}
+        <div class="section-title">Блок 3 — Итоговая оценка периода</div>
+        <div class="grid-3">
+          ${inputField("Общая оценка выполнения целей (1-5)","goalsSummary.score",e.goalsSummary.score,"number")}
+          ${inputField("Дата оценки","goalsSummary.date",e.goalsSummary.date,"date")}
+        </div>
+        <div class="grid-2">${textAreaField("Комментарий руководителя по итогам периода","goalsSummary.comment",e.goalsSummary.comment)}</div>`;
+      }
+
+      p.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div style="display:flex;gap:10px;align-items:center;">
+          <div class="avatar" style="background:${avatarColor(e.fullName)};width:54px;height:54px;font-size:18px;">${initials(e.fullName)}</div>
+          <div><div style="font-size:18px;font-weight:800;">${escapeHtml(e.fullName)}</div><div class="muted">${escapeHtml(e.role)} · ${escapeHtml(e.team)}</div></div>
+        </div>
+        <button id="deleteEmployee" class="danger-text">Удалить сотрудника</button>
+      </div>${tabBtns}${content}`;
+    }
+
+    function setByPath(obj,path,value) {
+      const parts = path.split(".");
+      let cur = obj;
+      for (let i=0;i<parts.length-1;i++) cur=cur[parts[i]];
+      cur[parts[parts.length-1]] = value;
+    }
+    function autoTyped(value,typeHint) {
+      if (typeHint==="number") return Number(value||0);
+      return value;
+    }
+
+    function addRow(type) {
+      const e = selectedEmployee(); if (!e) return;
+      if (type==="project") e.load.projects.push("");
+      if (type==="vacation") e.load.vacations.push({from:"",to:""});
+      if (type==="sick") e.load.sickLeaves.push({from:"",to:""});
+      if (type==="skill") e.skills.push({name:"",level:1,comment:""});
+      if (type==="dev") e.development.push({zone:"",activities:"",deadline:"",mentor:"",status:"в работе"});
+      if (type==="ph") e.projectHistory.push({period:"",project:"",role:"",result:""});
+      if (type==="sh") e.salaryHistory.push({date:"",from:0,to:0,reason:""});
+      if (type==="mc") e.managerComments.unshift({date:new Date().toISOString().slice(0,10),text:""});
+      if (type==="doc") e.documents.push({title:"",url:""});
+      if (type==="task") e.tasks.push({text:"",due:"",status:"открыта"});
+      if (type==="o2o") e.oneOnOne.history.unshift({date:"",topics:"",notes:"",agreements:""});
+      if (type==="goal") { ensureGoalsFields(e); e.goals.push({period:e.goalsCurrentPeriod||currentGoalPeriod(),title:"",priority:"средний",due:"",progress:0,status:"в работе",comment:""}); }
+      saveState(); renderAll();
+    }
+    function delRow(type,index) {
+      const e = selectedEmployee(); if (!e) return;
+      const i = Number(index);
+      if (type==="project") e.load.projects.splice(i,1);
+      if (type==="vacation") e.load.vacations.splice(i,1);
+      if (type==="sick") e.load.sickLeaves.splice(i,1);
+      if (type==="skill") e.skills.splice(i,1);
+      if (type==="dev") e.development.splice(i,1);
+      if (type==="ph") e.projectHistory.splice(i,1);
+      if (type==="sh") e.salaryHistory.splice(i,1);
+      if (type==="mc") e.managerComments.splice(i,1);
+      if (type==="doc") e.documents.splice(i,1);
+      if (type==="task") e.tasks.splice(i,1);
+      if (type==="o2o") e.oneOnOne.history.splice(i,1);
+      if (type==="goal") e.goals.splice(i,1);
+      saveState(); renderAll();
+    }
+
+    function addEmployee() {
+      const e = {
+        id:uid(), fullName:"Новый сотрудник", role:"", team:"Без команды", hireDate:"", salaryReviewDate:"",
+        salary:0, employeeNumber:"", positionId:"", location:"", email:"", teams:"", telegram:"", grade:"Junior", birthday:"",
+        load:{currentDays:0,currentPercent:0,capacityMonth:20,status:"доступен",nextMonthPlan:0,vacations:[],sickLeaves:[],projects:[]},
+        skills:[], development:[], managerRating:{score:3,comment:""}, projectHistory:[], salaryHistory:[],
+        hobbies:"", managerComments:[], documents:[], risk:{level:"низкий",comment:""}, promotionReadiness:"не готов",
+        workPreference:"гибрид", tasks:[],
+        oneOnOne:{nextDate:"",prepNotes:"",history:[],agendaChecklist:{feedback:false,goals:false,load:false,growth:false,wellbeing:false},agendaExtra:""},
+        goalsCurrentPeriod:currentGoalPeriod(), goals:[], goalsSummary:{score:3,comment:"",date:""}, teamHistory:[]
+      };
+      state.employees.push(e); state.selectedId = e.id;
+      saveState(); renderAll();
+    }
+    function deleteEmployee() {
+      const e = selectedEmployee(); if (!e) return;
+      if (!confirm("Удалить сотрудника " + e.fullName + "?")) return;
+      state.employees = state.employees.filter(x=>x.id!==e.id);
+      state.selectedId = state.employees[0] ? state.employees[0].id : null;
+      saveState(); renderAll();
+    }
+
+    function renderDashboard() {
+      const root = document.getElementById("dashboardBody");
+      const employees = state.employees;
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0,10);
+      const days14 = new Date(today.getTime()+14*24*60*60*1000);
+      const teams = {};
+      employees.forEach(e=>{ if (!teams[e.team]) teams[e.team]={count:0,loadSum:0}; teams[e.team].count+=1; teams[e.team].loadSum+=Number(e.load.currentPercent)||0; });
+      const employeesInVacationNow = employees.filter(e=>e.load.vacations.some(isCurrentInRange)).length;
+      const employeesInSickNow = employees.filter(e=>e.load.sickLeaves.some(isCurrentInRange)).length;
+      const openTasksCount = employees.reduce((sum,e)=>sum+e.tasks.filter(t=>t.status!=="выполнена").length,0);
+      const avgLoadTotal = employees.length ? Math.round(employees.reduce((sum,e)=>sum+(Number(e.load.currentPercent)||0),0)/employees.length) : 0;
+      const fotOverdue = employees.map(e=>({e,months:monthDiff(e.salaryReviewDate)})).filter(x=>x.months>12).sort((a,b)=>b.months-a.months);
+      const fotSoon = employees.map(e=>{
+        if (!e.salaryReviewDate) return null;
+        const last=new Date(e.salaryReviewDate); if (isNaN(last.getTime())) return null;
+        const next=new Date(last); next.setMonth(next.getMonth()+12);
+        return {e,months:monthDiff(e.salaryReviewDate),next};
+      }).filter(x=>x&&x.next>=today&&x.next<=new Date(today.getTime()+92*24*60*60*1000)).sort((a,b)=>a.next-b.next);
+      const highRisk = employees.filter(e=>e.risk.level==="высокий");
+      const mediumRisk = employees.filter(e=>e.risk.level==="средний");
+      const overloaded = employees.filter(e=>(Number(e.load.currentPercent)||0)>90).sort((a,b)=>(Number(b.load.currentPercent)||0)-(Number(a.load.currentPercent)||0)).slice(0,8);
+      const underloaded = employees.filter(e=>(Number(e.load.currentPercent)||0)<60).sort((a,b)=>(Number(a.load.currentPercent)||0)-(Number(b.load.currentPercent)||0)).slice(0,8);
+      const taskRows = [];
+      employees.forEach(e=>e.tasks.forEach(t=>{if (t.status==="выполнена") return; taskRows.push({employee:e,text:t.text||"",due:t.due||"",status:t.status||"открыта"});}));
+      taskRows.sort((a,b)=>(a.due||"9999-12-31").localeCompare(b.due||"9999-12-31"));
+      const overdueTasks = taskRows.filter(t=>t.due&&t.due<todayStr);
+      const next14Tasks = taskRows.filter(t=>t.due&&new Date(t.due)>=today&&new Date(t.due)<=days14);
+      const promotionReady = employees.filter(e=>e.promotionReadiness==="готов сейчас");
+      const promotionSoon = employees.filter(e=>e.promotionReadiness==="в перспективе");
+      const activeGoalPeriod = currentGoalPeriod();
+      const employeesWithoutGoalsCurrent = employees.filter(e=>{ ensureGoalsFields(e); return e.goalsCurrentPeriod===activeGoalPeriod&&!e.goals.some(g=>(g.period||"")===activeGoalPeriod); }).length;
+      const currentGoalsAll = [];
+      employees.forEach(e=>{ ensureGoalsFields(e); e.goals.forEach(g=>{ if ((g.period||"")===activeGoalPeriod) currentGoalsAll.push(g); }); });
+      const avgGoalsProgress = currentGoalsAll.length ? Math.round(currentGoalsAll.reduce((sum,g)=>sum+Math.max(0,Math.min(100,Number(g.progress)||0)),0)/currentGoalsAll.length) : 0;
+      const noRecentOneOnOne = employees.map(e=>{
+        const last=e.oneOnOne&&e.oneOnOne.history&&e.oneOnOne.history[0]&&e.oneOnOne.history[0].date?e.oneOnOne.history[0].date:"";
+        return {e,last,days:last?Math.floor((today-new Date(last))/(1000*60*60*24)):9999};
+      }).filter(x=>x.days>30).sort((a,b)=>b.days-a.days).slice(0,10);
+      const weekStart = startOfWeek(today);
+      const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate()+6);
+      const oneOnOneThisWeek = employees.filter(e=>e.oneOnOne.nextDate).filter(e=>{const d=new Date(e.oneOnOne.nextDate);return d>=weekStart&&d<=weekEnd;}).sort((a,b)=>(a.oneOnOne.nextDate||"").localeCompare(b.oneOnOne.nextDate||""));
+
+      const renderEmpLink = e => `<button class="employee-link" data-open-employee="${e.id}">${escapeHtml(e.fullName)}</button>`;
+
+      root.innerHTML = `
+        <div class="kpi-grid">
+          <div class="kpi good"><div>Всего сотрудников</div><div class="v">${employees.length}</div></div>
+          <div class="kpi warn"><div>Средняя загрузка команды</div><div class="v">${avgLoadTotal}%</div></div>
+          <div class="kpi ${openTasksCount>0?"danger":"good"}"><div>Открытых задач руководителя</div><div class="v">${openTasksCount}</div></div>
+        </div>
+        <div class="dash-grid-3">
+          <div class="kpi"><div>Сейчас в отпуске</div><div class="v">${employeesInVacationNow}</div></div>
+          <div class="kpi"><div>Сейчас на больничном</div><div class="v">${employeesInSickNow}</div></div>
+          <div class="kpi"><div>Команд/стримов</div><div class="v">${Object.keys(teams).length}</div></div>
+          <div class="kpi ${employeesWithoutGoalsCurrent>0?"warn":"good"}"><div>Без целей на период ${activeGoalPeriod}</div><div class="v">${employeesWithoutGoalsCurrent}</div></div>
+          <div class="kpi ${avgGoalsProgress>=70?"good":avgGoalsProgress>=40?"warn":"danger"}"><div>Средний прогресс целей</div><div class="v">${avgGoalsProgress}%</div></div>
+        </div>
+        <div class="dash-grid">
+          <section class="panel"><div class="section-title">Блок 1 — Сводка по команде</div>
+            <table><thead><tr><th>Команда/стрим</th><th>Сотрудников</th><th>Средняя загрузка</th></tr></thead><tbody>
+              ${Object.entries(teams).sort((a,b)=>a[0].localeCompare(b[0],"ru")).map(([team,data])=>`<tr><td>${escapeHtml(team)}</td><td>${data.count}</td><td>${Math.round(data.loadSum/data.count)}%</td></tr>`).join("")||`<tr><td colspan="3" class="muted">Нет данных</td></tr>`}
+            </tbody></table>
+          </section>
+          <section class="panel"><div class="section-title">Блок 2 — Пересмотр ФОТ</div>
+            <div class="section-title"><span class="badge danger">Просрочено &gt; 12 мес</span></div>
+            <div class="dash-card-list">${fotOverdue.map(x=>`<div class="dash-item danger">${renderEmpLink(x.e)} · ${escapeHtml(x.e.team)}<br><span class="muted">Последний пересмотр: ${x.e.salaryReviewDate||"—"} · прошло ${x.months} мес</span></div>`).join("")||`<div class="muted">Нет просроченных</div>`}</div>
+            <div class="section-title"><span class="badge warn">В ближайшие 3 месяца</span></div>
+            <div class="dash-card-list">${fotSoon.map(x=>`<div class="dash-item warn">${renderEmpLink(x.e)} · ${escapeHtml(x.e.team)}<br><span class="muted">Последний пересмотр: ${x.e.salaryReviewDate||"—"} · прошло ${x.months} мес</span></div>`).join("")||`<div class="muted">Нет ближайших пересмотров</div>`}</div>
+          </section>
+          <section class="panel"><div class="section-title">Блок 3 — Риски</div>
+            <div class="section-title"><span class="badge danger">Высокий риск</span></div>
+            <div class="dash-card-list">${highRisk.map(e=>`<div class="dash-item danger">${renderEmpLink(e)} · ${escapeHtml(e.team)}<br><span class="muted">${escapeHtml(e.risk.comment||"—")}</span></div>`).join("")||`<div class="muted">Нет сотрудников</div>`}</div>
+            <div class="section-title"><span class="badge warn">Средний риск</span></div>
+            <div class="dash-card-list">${mediumRisk.map(e=>`<div class="dash-item warn">${renderEmpLink(e)} · ${escapeHtml(e.team)}<br><span class="muted">${escapeHtml(e.risk.comment||"—")}</span></div>`).join("")||`<div class="muted">Нет сотрудников</div>`}</div>
+          </section>
+          <section class="panel"><div class="section-title">Блок 4 — Загрузка команды</div>
+            <div class="section-title"><span class="badge danger">Перегружены (&gt; 90%)</span></div>
+            <div class="dash-card-list">${overloaded.map(e=>`<div class="dash-item danger">${renderEmpLink(e)} · ${escapeHtml(e.team)} · <b>${e.load.currentPercent}%</b><div class="loadbar compact"><span style="width:${Math.min(100,Number(e.load.currentPercent)||0)}%; background:#dc2626;"></span></div></div>`).join("")||`<div class="muted">Нет перегруженных</div>`}</div>
+            <div class="section-title"><span class="badge good">Недогружены (&lt; 60%)</span></div>
+            <div class="dash-card-list">${underloaded.map(e=>`<div class="dash-item good">${renderEmpLink(e)} · ${escapeHtml(e.team)} · <b>${e.load.currentPercent}%</b><div class="loadbar compact"><span style="width:${Math.min(100,Number(e.load.currentPercent)||0)}%; background:#059669;"></span></div></div>`).join("")||`<div class="muted">Нет недогруженных</div>`}</div>
+          </section>
+          <section class="panel"><div class="section-title">Блок 5 — Ближайшие задачи</div>
+            <div class="section-title"><span class="badge danger">Просроченные</span></div>
+            <table><thead><tr><th>Задача</th><th>Сотрудник</th><th>Срок</th></tr></thead><tbody>
+              ${overdueTasks.map(t=>`<tr class="status-overdue"><td>${escapeHtml(t.text)}</td><td>${renderEmpLink(t.employee)}</td><td class="danger-text">${t.due||"—"}</td></tr>`).join("")||`<tr><td colspan="3" class="muted">Нет просроченных задач</td></tr>`}
+            </tbody></table>
+            <div class="section-title"><span class="badge warn">На ближайшие 14 дней</span></div>
+            <table><thead><tr><th>Задача</th><th>Сотрудник</th><th>Срок</th></tr></thead><tbody>
+              ${next14Tasks.map(t=>`<tr><td>${escapeHtml(t.text)}</td><td>${renderEmpLink(t.employee)}</td><td>${t.due||"—"}</td></tr>`).join("")||`<tr><td colspan="3" class="muted">Нет задач на ближайшие 14 дней</td></tr>`}
+            </tbody></table>
+          </section>
+          <section class="panel"><div class="section-title">Блок 6 — Готовность к повышению</div>
+            <div class="section-title"><span class="badge good">Готов сейчас</span></div>
+            <div class="dash-card-list">${promotionReady.map(e=>`<div class="dash-item good">${renderEmpLink(e)} · ${escapeHtml(e.role)} · ${escapeHtml(e.grade)}<br><span class="muted">${escapeHtml((e.managerRating&&e.managerRating.comment)||"—")}</span></div>`).join("")||`<div class="muted">Нет сотрудников</div>`}</div>
+            <div class="section-title"><span class="badge warn">В перспективе</span></div>
+            <div class="dash-card-list">${promotionSoon.map(e=>`<div class="dash-item warn">${renderEmpLink(e)} · ${escapeHtml(e.role)} · ${escapeHtml(e.grade)}<br><span class="muted">${escapeHtml((e.managerRating&&e.managerRating.comment)||"—")}</span></div>`).join("")||`<div class="muted">Нет сотрудников</div>`}</div>
+          </section>
+          <section class="panel"><div class="section-title">Блок 7 — 1-on-1</div>
+            <div class="section-title"><span class="badge danger">Давно не было встречи (&gt; 30 дней)</span></div>
+            <div class="dash-card-list">${noRecentOneOnOne.map(x=>`<div class="dash-item danger">${renderEmpLink(x.e)} · ${escapeHtml(x.e.team)}<br><span class="muted">Последняя: ${x.last||"нет данных"} · ${x.days===9999?"история пустая":x.days+" дней назад"}</span></div>`).join("")||`<div class="muted">Все получали 1-on-1 за последние 30 дней</div>`}</div>
+            <div class="section-title"><span class="badge good">Ближайшая встреча на этой неделе</span></div>
+            <div class="dash-card-list">${oneOnOneThisWeek.map(e=>`<div class="dash-item good">${renderEmpLink(e)} · ${escapeHtml(e.team)}<br><span class="muted">Дата: ${e.oneOnOne.nextDate}</span></div>`).join("")||`<div class="muted">На этой неделе встреч не запланировано</div>`}</div>
+          </section>
+        </div>`;
+    }
+
+    function renderCalendar() {
+      const root = document.getElementById("calendarBody");
+      const employees = state.employees;
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0,10);
+      const calStart = new Date(today.getFullYear(),today.getMonth(),1);
+      const calEnd = new Date(today.getFullYear(),today.getMonth()+3,0);
+      const daysSpan = Math.max(1,Math.floor((calEnd-calStart)/(24*60*60*1000))+1);
+      const monthLabels = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+      const monthHeaders = [];
+      const dayHeaders = [];
+      for (let i=0;i<daysSpan;i++) {
+        const d = new Date(calStart); d.setDate(calStart.getDate()+i);
+        if (d.getDate()===1) monthHeaders.push({idx:i,label:monthLabels[d.getMonth()]+" "+d.getFullYear()});
+        dayHeaders.push(d.getDate());
+      }
+      let rowsHtml = `<div class="cal-cell cal-head cal-name">Сотрудник</div>`;
+      for (let i=0;i<daysSpan;i++) rowsHtml+=`<div class="cal-cell cal-head">${dayHeaders[i]}</div>`;
+      employees.forEach(e=>{
+        rowsHtml+=`<div class="cal-cell cal-name">${escapeHtml(e.fullName)}</div>`;
+        for (let i=0;i<daysSpan;i++) {
+          const d=new Date(calStart); d.setDate(calStart.getDate()+i);
+          const dStr=d.toISOString().slice(0,10);
+          let cls="cal-cell";
+          const vac=(e.load.vacations||[]).find(p=>p.from&&p.to&&dStr>=p.from&&dStr<=p.to);
+          const sick=(e.load.sickLeaves||[]).find(p=>p.from&&p.to&&dStr>=p.from&&dStr<=p.to);
+          if (vac) cls+=" cal-vac";
+          if (sick) cls+=" cal-sick";
+          if (dStr===todayStr) cls+=" cal-today";
+          rowsHtml+=`<div class="${cls}"></div>`;
+        }
+      });
+      const year=today.getFullYear();
+      const monthCapacityRows=employees.map(e=>{
+        const monthCells=[];
+        for (let m=0;m<12;m++) {
+          const dim=daysInMonth(year,m);
+          const workDays=Math.round((dim*5)/7);
+          const ms=new Date(year,m,1), me=new Date(year,m,dim);
+          let daysOff=0;
+          [...(e.load.vacations||[]),...(e.load.sickLeaves||[])].forEach(p=>{
+            if (!p.from||!p.to) return;
+            const pf=new Date(p.from),pt=new Date(p.to);
+            if (!overlapsPeriod(pf,pt,ms,me)) return;
+            const from=pf<ms?ms:pf, to=pt>me?me:pt;
+            daysOff+=Math.floor((to-from)/(24*60*60*1000))+1;
+          });
+          monthCells.push(Math.max(0,workDays-daysOff));
+        }
+        return {e,monthCells};
+      });
+      const totalsByMonth=new Array(12).fill(0);
+      monthCapacityRows.forEach(r=>r.monthCells.forEach((v,i)=>{totalsByMonth[i]+=v;}));
+      const nowVacation=employees.filter(e=>(e.load.vacations||[]).some(isCurrentInRange));
+      const inTwoWeeks=new Date(today.getTime()+14*24*60*60*1000);
+      const upcomingVacation=employees.filter(e=>(e.load.vacations||[]).some(p=>{ if (!p.from) return false; const d=new Date(p.from); return d>=today&&d<=inTwoWeeks; }));
+      const cm=today.getMonth();
+      const currentMonthTeamCap=totalsByMonth[cm]||0;
+      const currentMonthTeamMax=employees.reduce((sum)=>sum+Math.round((daysInMonth(year,cm)*5)/7),0);
+      const currentMonthTeamPct=currentMonthTeamMax?Math.round((currentMonthTeamCap/currentMonthTeamMax)*100):0;
+
+      root.innerHTML = `
+        <section class="panel">
+          <div class="section-title">Блок 1 — Календарь отпусков команды</div>
+          <div class="muted">Период: ${monthLabels[calStart.getMonth()]} ${calStart.getFullYear()} — ${monthLabels[calEnd.getMonth()]} ${calEnd.getFullYear()}</div>
+          <div class="calendar-grid">${rowsHtml}</div>
+        </section>
+        <section class="panel">
+          <div class="section-title">Блок 2 — Планирование capacity по месяцам</div>
+          <table><thead><tr><th>Сотрудник</th><th>Команда</th>${monthLabels.map(m=>`<th>${m.slice(0,3)}</th>`).join("")}</tr></thead><tbody>
+            ${monthCapacityRows.map(r=>`<tr><td>${escapeHtml(r.e.fullName)}</td><td>${escapeHtml(r.e.team)}</td>${r.monthCells.map(v=>`<td class="${v<10?"capacity-low":""}">${v}</td>`).join("")}</tr>`).join("")}
+            <tr><td><b>Итого</b></td><td><b>—</b></td>${totalsByMonth.map(v=>`<td><b>${v}</b></td>`).join("")}</tr>
+          </tbody></table>
+        </section>
+        <section class="panel">
+          <div class="section-title">Блок 3 — Сводка по текущему месяцу</div>
+          <div class="dash-grid">
+            <div><div class="section-title"><span class="badge warn">Сейчас в отпуске</span></div><ul class="list">${nowVacation.map(e=>`<li>${escapeHtml(e.fullName)}</li>`).join("")||"<li>Нет</li>"}</ul></div>
+            <div><div class="section-title"><span class="badge good">Уходят в отпуск в ближайшие 2 недели</span></div><ul class="list">${upcomingVacation.map(e=>`<li>${escapeHtml(e.fullName)}</li>`).join("")||"<li>Нет запланированных уходов</li>"}</ul></div>
+          </div>
+          <div class="kpi-grid">
+            <div class="kpi"><div>Capacity команды (текущий месяц)</div><div class="v">${currentMonthTeamCap} ЧД</div></div>
+            <div class="kpi ${currentMonthTeamPct<60?"danger":currentMonthTeamPct<80?"warn":"good"}"><div>Доступность команды</div><div class="v">${currentMonthTeamPct}%</div></div>
+          </div>
+        </section>`;
+    }
+
+    function renderDevelopment() {
+      const root = document.getElementById("developmentBody");
+      const employees = state.employees;
+      const todayStr = new Date().toISOString().slice(0,10);
+      const toSkillsLink = e => `<button class="employee-link" data-open-employee-skills="${e.id}">${escapeHtml(e.fullName)}</button>`;
+      const iprRows = employees.map(e=>{
+        const goals=Array.isArray(e.development)?e.development:[];
+        const total=goals.length, done=goals.filter(g=>g.status==="выполнено").length;
+        const inProgress=goals.filter(g=>g.status!=="выполнено").length;
+        const overdue=goals.filter(g=>g.status!=="выполнено"&&g.deadline&&g.deadline<todayStr).length;
+        const progress=total?Math.round((done/total)*100):0;
+        return {e,total,done,inProgress,overdue,progress};
+      });
+      const skillSet=new Set();
+      employees.forEach(e=>(e.skills||[]).forEach(s=>{if (s&&s.name) skillSet.add(String(s.name));}));
+      const skillColumns=[...skillSet].sort((a,b)=>a.localeCompare(b,"ru"));
+      const skillMapByEmp=new Map();
+      employees.forEach(e=>{ const map={}; (e.skills||[]).forEach(s=>{if (s&&s.name) map[s.name]=Number(s.level)||0;}); skillMapByEmp.set(e.id,map); });
+      const readyNow=employees.filter(e=>e.promotionReadiness==="готов сейчас");
+      const readySoon=employees.filter(e=>e.promotionReadiness==="в перспективе");
+      const notReady=employees.filter(e=>e.promotionReadiness==="не готов");
+
+      root.innerHTML = `
+        <section class="panel"><div class="section-title">Блок 1 — Сводка по ИПР команды</div>
+          <table><thead><tr><th>ФИО</th><th>Команда</th><th>Целей развития</th><th>Выполнено</th><th>В работе</th><th>Просрочено</th><th>Прогресс</th></tr></thead><tbody>
+            ${iprRows.map(r=>`<tr><td>${toSkillsLink(r.e)}</td><td>${escapeHtml(r.e.team)}</td><td>${r.total}</td><td>${r.done}</td><td>${r.inProgress}</td><td class="${r.overdue>0?"danger-text":""}">${r.overdue}</td><td><div>${r.progress}%</div><div class="loadbar compact"><span style="width:${r.progress}%; background:${r.progress>=70?"#059669":r.progress>=40?"#d97706":"#dc2626"};"></span></div></td></tr>`).join("")||`<tr><td colspan="7" class="muted">Нет сотрудников</td></tr>`}
+          </tbody></table>
+        </section>
+        <section class="panel"><div class="section-title">Блок 2 — Навыки команды</div>
+          <table><thead><tr><th>Сотрудник</th>${skillColumns.map(s=>`<th>${escapeHtml(s)}</th>`).join("")}</tr></thead><tbody>
+            ${employees.map(e=>{ const m=skillMapByEmp.get(e.id)||{}; return `<tr><td>${toSkillsLink(e)}</td>${skillColumns.map(s=>{ const lvl=Number(m[s]||0); if (!lvl) return `<td class="muted" style="text-align:center;">-</td>`; const cls=lvl<=2?"skill-lvl-low":lvl===3?"skill-lvl-mid":"skill-lvl-high"; return `<td class="${cls}">${lvl}</td>`; }).join("")}</tr>`; }).join("")||`<tr><td class="muted">Нет данных</td></tr>`}
+          </tbody></table>
+        </section>
+        <section class="panel"><div class="section-title">Блок 3 — Готовность к повышению</div>
+          <div class="dev-columns">
+            <div><div class="section-title"><span class="badge good">Готов сейчас</span></div><div class="dash-card-list">${readyNow.map(e=>`<div class="dash-item good">${toSkillsLink(e)}<br><span class="muted">${escapeHtml(e.role)} · ${escapeHtml(e.grade)}</span><br><span class="muted">${escapeHtml((e.managerRating&&e.managerRating.comment)||"—")}</span></div>`).join("")||`<div class="muted">Нет сотрудников</div>`}</div></div>
+            <div><div class="section-title"><span class="badge warn">В перспективе</span></div><div class="dash-card-list">${readySoon.map(e=>`<div class="dash-item warn">${toSkillsLink(e)}<br><span class="muted">${escapeHtml(e.role)} · ${escapeHtml(e.grade)}</span><br><span class="muted">${escapeHtml((e.managerRating&&e.managerRating.comment)||"—")}</span></div>`).join("")||`<div class="muted">Нет сотрудников</div>`}</div></div>
+            <div><div class="section-title"><span class="badge danger">Не готов</span></div><div class="dash-card-list">${notReady.map(e=>`<div class="dash-item danger">${toSkillsLink(e)}<br><span class="muted">${escapeHtml(e.role)} · ${escapeHtml(e.grade)}</span><br><span class="muted">${escapeHtml((e.managerRating&&e.managerRating.comment)||"—")}</span></div>`).join("")||`<div class="muted">Нет сотрудников</div>`}</div></div>
+          </div>
+        </section>`;
+    }
+
+    function enhanceMainTeamSelect() {
+      const panel=document.getElementById("employeePanel");
+      if (!panel||state.activeTab!=="main") return;
+      const teamInput=panel.querySelector('input[data-field="team"]');
+      if (!teamInput) return;
+      const wrapper=teamInput.closest(".field"); if (!wrapper) return;
+      ensureTeamsFromEmployees();
+      const options=teamNames().sort((a,b)=>a.localeCompare(b,"ru")).map(n=>`<option ${n===teamInput.value?"selected":""}>${escapeHtml(n)}</option>`).join("");
+      wrapper.innerHTML=`<label>Команда/стрим</label><select data-field="team">${options}</select>`;
+    }
+
+    function renderSettings() {
+      const root=document.getElementById("settingsBody");
+      ensureTeamsFromEmployees();
+      const teams=state.teams.slice().sort((a,b)=>a.name.localeCompare(b.name,"ru"));
+      root.innerHTML=`<div class="settings-grid">
+        <section class="panel"><div class="section-title">Команды</div>
+          <div style="margin:10px 0;">${teams.map(t=>`<div class="team-row"><div class="team-row-left"><span class="team-dot" style="background:${escapeHtml(t.color||"#94a3b8")}"></span><b>${escapeHtml(t.name)}</b></div><div class="team-actions"><button class="btn-small" data-team-rename="${t.id}">Переименовать</button><button class="btn-small" data-team-delete="${t.id}">Удалить</button></div></div>`).join("")||`<div class="muted">Нет команд</div>`}</div>
+        </section>
+        <section class="panel"><div class="section-title">Добавить команду</div>
+          <div class="field"><label>Название</label><input id="newTeamName" placeholder="Например, Platform Core" /></div>
+          <div class="field"><label>Цвет</label><input id="newTeamColor" type="color" value="#2563eb" /></div>
+          <button id="addTeamBtn" class="primary">Добавить команду</button>
+        </section>
+      </div>`;
+    }
+
+    function startImportFlow(file) {
+      if (!file) return;
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        try {
+          const wb=XLSX.read(ev.target.result,{type:"array"});
+          const ws=wb.Sheets[wb.SheetNames[0]];
+          const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:""});
+          if (!rows.length) return alert("Файл пустой");
+          const headers=rows[0].map(x=>String(x||"").trim());
+          const records=rows.slice(1).filter(r=>r.some(v=>String(v||"").trim()!==""));
+          state.importDraft={fileName:file.name,headers,records};
+          renderImportModal();
+        } catch(e) { alert("Не удалось прочитать файл"); }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function renderImportModal() {
+      const draft=state.importDraft; if (!draft) return;
+      const systemFields=[
+        {key:"fullName",label:"ФИО *"},{key:"role",label:"Должность *"},{key:"team",label:"Команда *"},
+        {key:"employeeNumber",label:"Табельный номер"},{key:"email",label:"Email"},
+        {key:"hireDate",label:"Дата приёма"},{key:"location",label:"Локация"},
+        {key:"grade",label:"Грейд"},{key:"salary",label:"Оклад"}
+      ];
+      if (!draft.mapping) draft.mapping={};
+      const options=`<option value="">— не выбрано —</option>`+draft.headers.map((h,i)=>`<option value="${i}">${escapeHtml(h||("Колонка "+(i+1)))}</option>`).join("");
+      document.getElementById("importMeta").textContent=`Файл: ${draft.fileName} · колонок: ${draft.headers.length} · строк: ${draft.records.length}`;
+      document.getElementById("importMapping").innerHTML=systemFields.map(f=>`<div class="field"><label>${f.label}</label><select data-import-map="${f.key}">${options}</select></div>`).join("");
+      systemFields.forEach(f=>{ const el=document.querySelector(`[data-import-map="${f.key}"]`); if (el) el.value=typeof draft.mapping[f.key]==="number"?String(draft.mapping[f.key]):""; });
+      const preview=draft.records.slice(0,5);
+      document.getElementById("importPreview").innerHTML=`<table><thead><tr>${draft.headers.map(h=>`<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${preview.map(r=>`<tr>${draft.headers.map((_,i)=>`<td>${escapeHtml(r[i]??"")}</td>`).join("")}</tr>`).join("")||`<tr><td class="muted">Нет данных</td></tr>`}</tbody></table>`;
+      document.getElementById("importModal").classList.add("active");
+    }
+
+    function applyImport() {
+      const draft=state.importDraft; if (!draft) return;
+      const map=draft.mapping||{};
+      if (![map.fullName,map.role,map.team].every(v=>typeof v==="number")) { alert("Заполните обязательные поля: ФИО, Должность, Команда"); return; }
+      let added=0;
+      draft.records.forEach(row=>{
+        const fullName=String(row[map.fullName]||"").trim();
+        const role=String(row[map.role]||"").trim();
+        const team=String(row[map.team]||"").trim()||"Без команды";
+        if (!fullName||!role) return;
+        const emp={
+          id:uid(), fullName, role, team, birthday:"",
+          hireDate:String(row[map.hireDate]||"").trim(), salaryReviewDate:"", salary:Number(row[map.salary]||0),
+          employeeNumber:String(row[map.employeeNumber]||"").trim(), positionId:"", location:String(row[map.location]||"").trim(),
+          email:String(row[map.email]||"").trim(), teams:"", telegram:"", grade:String(row[map.grade]||"Junior").trim()||"Junior",
+          load:{currentDays:0,currentPercent:0,capacityMonth:20,status:"доступен",nextMonthPlan:0,vacations:[],sickLeaves:[],projects:[]},
+          skills:[], development:[], managerRating:{score:3,comment:""}, projectHistory:[], salaryHistory:[],
+          hobbies:"", managerComments:[], documents:[], risk:{level:"низкий",comment:""}, promotionReadiness:"не готов",
+          workPreference:"гибрид", tasks:[],
+          oneOnOne:{nextDate:"",prepNotes:"",history:[],agendaChecklist:{feedback:false,goals:false,load:false,growth:false,wellbeing:false},agendaExtra:""},
+          goalsCurrentPeriod:currentGoalPeriod(), goals:[], goalsSummary:{score:3,comment:"",date:""}, teamHistory:[]
+        };
+        ensureOneOnOneShape(emp); ensureGoalsFields(emp); ensureEmployeeTeamHistory(emp);
+        state.employees.push(emp); added+=1;
+        if (!state.teams.some(t=>t.name===team)) state.teams.push({id:uid(),name:team,color:defaultTeamColor(state.teams.length)});
+      });
+      saveState(); saveTeams();
+      document.getElementById("importModal").classList.remove("active");
+      state.importDraft=null;
+      renderAll();
+      alert(`Импорт завершён. Добавлено сотрудников: ${added}`);
+    }
+
+    function exportCsv() {
+      const headers=["ФИО","Должность","Команда","Грейд","Дата приёма","Стаж","Дата пересмотра ФОТ","Мес после пересмотра","Оклад","Статус доступности","Текущая загрузка %","Capacity ЧД","Риск","Готовность к повышению","Локация","Email"];
+      const rows=state.employees.map(e=>[e.fullName,e.role,e.team,e.grade,e.hireDate,tenure(e.hireDate),e.salaryReviewDate,monthDiff(e.salaryReviewDate),e.salary,e.load.status,e.load.currentPercent,e.load.capacityMonth,e.risk.level,e.promotionReadiness,e.location,e.email]);
+      const csv=[headers,...rows].map(r=>r.map(cell=>`"${String(cell??"").replaceAll('"','""')}"`).join(";")).join("\n");
+      const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});
+      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="staff-crm-export.csv"; a.click(); URL.revokeObjectURL(a.href);
+    }
+
+    function renderAll() {
+      renderTeamFilter(); renderTeamCounters(); renderEmployeeList(); renderEmployeePanel(); enhanceMainTeamSelect();
+      renderDashboard(); renderCalendar(); renderDevelopment(); renderSettings(); renderNotifications();
+      renderBell();
+      document.getElementById("crmScreen").classList.toggle("active",state.screen==="crm");
+      document.getElementById("dashboardScreen").classList.toggle("active",state.screen==="dashboard");
+      document.getElementById("calendarScreen").classList.toggle("active",state.screen==="calendar");
+      document.getElementById("developmentScreen").classList.toggle("active",state.screen==="development");
+      document.getElementById("settingsScreen").classList.toggle("active",state.screen==="settings");
+      document.getElementById("goCrm").classList.toggle("primary",state.screen==="crm");
+      document.getElementById("goDashboard").classList.toggle("primary",state.screen==="dashboard");
+      document.getElementById("goCalendar").classList.toggle("primary",state.screen==="calendar");
+      document.getElementById("goDevelopment").classList.toggle("primary",state.screen==="development");
+      document.getElementById("goSettings").classList.toggle("primary",state.screen==="settings");
+    }
+
+    document.addEventListener("click",e=>{
+      const card=e.target.closest("[data-emp-card]");
+      if (card) { state.selectedId=card.getAttribute("data-emp-card"); saveState(); renderAll(); return; }
+      const tb=e.target.closest("[data-tab]");
+      if (tb) { state.activeTab=tb.getAttribute("data-tab"); renderAll(); return; }
+      const add=e.target.closest("[data-add-row]");
+      if (add) return addRow(add.getAttribute("data-add-row"));
+      const del=e.target.closest("[data-del-row]");
+      if (del) { const [type,idx]=del.getAttribute("data-del-row").split("."); return delRow(type,idx); }
+      if (e.target.id==="addEmployee") return addEmployee();
+      if (e.target.id==="deleteEmployee") return deleteEmployee();
+      if (e.target.id==="goCrm") { state.screen="crm"; renderAll(); return; }
+      if (e.target.id==="goDashboard") { state.screen="dashboard"; renderAll(); return; }
+      if (e.target.id==="goCalendar") { state.screen="calendar"; renderAll(); return; }
+      if (e.target.id==="goDevelopment") { state.screen="development"; renderAll(); return; }
+      if (e.target.id==="goSettings") { state.screen="settings"; renderAll(); return; }
+      if (e.target.id==="exportCsv") return exportCsv();
+      if (e.target.id==="importEmployees") { document.getElementById("importFileInput").click(); return; }
+      if (e.target.id==="cancelImport") { document.getElementById("importModal").classList.remove("active"); state.importDraft=null; return; }
+      if (e.target.id==="confirmImport") return applyImport();
+      if (e.target.id==="addTeamBtn") {
+        const name=(document.getElementById("newTeamName").value||"").trim();
+        const color=document.getElementById("newTeamColor").value||defaultTeamColor(state.teams.length);
+        if (!name) return alert("Укажите название команды");
+        if (state.teams.some(t=>t.name===name)) return alert("Такая команда уже есть");
+        state.teams.push({id:uid(),name,color}); saveTeams(); renderAll(); return;
+      }
+      const renameBtn=e.target.closest("[data-team-rename]");
+      if (renameBtn) {
+        const id=renameBtn.getAttribute("data-team-rename");
+        const team=state.teams.find(t=>t.id===id); if (!team) return;
+        const next=prompt("Новое название команды",team.name); if (!next||!next.trim()) return;
+        const nextName=next.trim();
+        if (state.teams.some(t=>t.name===nextName&&t.id!==id)) return alert("Такое название уже занято");
+        state.employees.forEach(emp=>{ if (emp.team===team.name) { ensureEmployeeTeamHistory(emp); emp.teamHistory.unshift({date:new Date().toISOString().slice(0,10),from:team.name,to:nextName,reason:"Переименование команды"}); emp.team=nextName; } });
+        team.name=nextName; saveTeams(); saveState(); renderAll(); return;
+      }
+      const delBtn=e.target.closest("[data-team-delete]");
+      if (delBtn) {
+        const id=delBtn.getAttribute("data-team-delete");
+        const team=state.teams.find(t=>t.id===id); if (!team) return;
+        if (team.name==="Без команды") return alert("Нельзя удалить базовую команду");
+        const cnt=state.employees.filter(emp=>emp.team===team.name).length;
+        if (!confirm(cnt>0?`В команде есть сотрудников: ${cnt}. Перевести в "Без команды" и удалить?`:`Удалить команду "${team.name}"?`)) return;
+        state.employees.forEach(emp=>{ if (emp.team===team.name) { ensureEmployeeTeamHistory(emp); emp.teamHistory.unshift({date:new Date().toISOString().slice(0,10),from:team.name,to:"Без команды",reason:"Удаление команды"}); emp.team="Без команды"; } });
+        state.teams=state.teams.filter(t=>t.id!==id); ensureTeamsFromEmployees(); saveTeams(); saveState(); renderAll(); return;
+      }
+      if (e.target.id==="meetingDoneBtn") {
+        const emp=selectedEmployee(); if (!emp) return;
+        const nextDate=emp.oneOnOne.nextDate||new Date().toISOString().slice(0,10);
+        emp.oneOnOne.history.unshift({date:nextDate,topics:emp.oneOnOne.agendaExtra||"",notes:emp.oneOnOne.prepNotes||"",agreements:""});
+        emp.oneOnOne.nextDate=""; emp.oneOnOne.prepNotes="";
+        saveState(); renderAll(); return;
+      }
+      const skillLink=e.target.closest("[data-open-employee-skills]");
+      if (skillLink) { state.selectedId=skillLink.getAttribute("data-open-employee-skills"); state.activeTab="skills"; state.screen="crm"; saveState(); renderAll(); return; }
+      const link=e.target.closest("[data-open-employee]");
+      if (link&&!link.hasAttribute("data-notif-id")) { state.selectedId=link.getAttribute("data-open-employee"); state.screen="crm"; saveState(); renderAll(); }
+    });
+
+    document.addEventListener("input",e=>{
+      const el=e.target;
+      if (el.dataset.importMap) { if (!state.importDraft) return; state.importDraft.mapping[el.dataset.importMap]=el.value===""?"":Number(el.value); return; }
+      if (el.id==="searchInput") { state.filters.search=el.value; renderEmployeeList(); return; }
+      if (el.id==="sortSelect") { state.filters.sort=el.value; renderEmployeeList(); return; }
+      const employee=selectedEmployee(); if (!employee) return;
+      if (el.dataset.field) {
+        const path=el.dataset.field;
+        const beforeTeam=path==="team"?employee.team:null;
+        const val=el.type==="checkbox"?el.checked:autoTyped(el.value,el.type);
+        setByPath(employee,path,val);
+        if (path==="team") {
+          ensureEmployeeTeamHistory(employee);
+          if (beforeTeam!==val) {
+            const reason=prompt("Причина смены команды","Ручное переназначение")||"Ручное переназначение";
+            employee.teamHistory.unshift({date:new Date().toISOString().slice(0,10),from:beforeTeam||"—",to:String(val||""),reason});
+          }
+          if (val&&!state.teams.some(t=>t.name===val)) { state.teams.push({id:uid(),name:String(val),color:defaultTeamColor(state.teams.length)}); saveTeams(); }
+        }
+        if (["fullName","role","team","salaryReviewDate","load.currentPercent","load.currentDays"].includes(path)) renderEmployeeList();
+        if (path==="team") renderTeamCounters();
+        saveState(); renderEmployeePanel();
+      }
+      if (el.dataset.listItem) {
+        const path=el.dataset.listItem;
+        setByPath(employee,path,autoTyped(el.value,el.type));
+        saveState();
+        if (["tasks","projects","skills","onetoone","goals"].includes(state.activeTab)) renderEmployeePanel();
+      }
+    });
+
+    document.getElementById("teamFilter").addEventListener("change",e=>{ state.filters.team=e.target.value; renderEmployeeList(); });
+    document.getElementById("availabilityFilter").addEventListener("change",e=>{ state.filters.availability=e.target.value; renderEmployeeList(); });
+    document.getElementById("sortSelect").addEventListener("change",e=>{ state.filters.sort=e.target.value; renderEmployeeList(); });
+    document.getElementById("searchInput").addEventListener("input",e=>{ state.filters.search=e.target.value; renderEmployeeList(); });
+    document.getElementById("importFileInput").addEventListener("change",e=>{ const file=e.target.files&&e.target.files[0]; startImportFlow(file); e.target.value=""; });
+
+    loadReadNotifs();
+    loadReadNotifs();
+    loadState();
+    loadTeams();
+    renderAll();
+  </script>
+</body>
+</html>
