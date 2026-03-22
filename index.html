@@ -403,6 +403,7 @@
       <button id="goProjects">Проекты</button>
       <button id="goSettings">Настройки</button>
       <button id="exportCsv">Экспорт в Excel (CSV)</button>
+      <button onclick="showHotkeysHelp()" title="Горячие клавиши" style="padding:7px 10px;">⌨</button>
       <div class="bell-wrap">
         <button class="bell-btn" id="bellBtn" title="Уведомления">🔔<span class="bell-badge" id="bellBadge"></span></button>
         <div class="bell-dropdown" id="bellDropdown">
@@ -618,6 +619,111 @@
       });
 
       return notifs;
+    }
+
+
+    function calcRiskScore(e) {
+      let score = 0;
+      const drivers = [];
+      const fotM = monthDiff(e.salaryReviewDate);
+      if (fotM > 12) { score += 0.30; drivers.push('Нет пересмотра ФОТ ' + fotM + ' мес.'); }
+      else if (fotM > 9) { score += 0.10; drivers.push('Пересмотр ФОТ скоро (' + fotM + ' мес.)'); }
+      const load = Number(e.load && e.load.currentPercent) || 0;
+      if (load > 100) { score += 0.25; drivers.push('Перегрузка ' + load + '%'); }
+      else if (load > 90) { score += 0.12; drivers.push('Высокая загрузка ' + load + '%'); }
+      const lastOoo = e.oneOnOne && e.oneOnOne.history && e.oneOnOne.history[0] ? e.oneOnOne.history[0].date : '';
+      const ooodays = lastOoo ? Math.floor((new Date() - new Date(lastOoo)) / 864e5) : 9999;
+      if (ooodays > 60) { score += 0.20; drivers.push('1-on-1 не было ' + (ooodays===9999?'никогда':ooodays+' дней')); }
+      else if (ooodays > 30) { score += 0.08; drivers.push('1-on-1 ' + ooodays + ' дней назад'); }
+      const todayStr = new Date().toISOString().slice(0,10);
+      const overdueDev = (e.development||[]).filter(d=>d.status!=='выполнено'&&d.deadline&&d.deadline<todayStr).length;
+      if (overdueDev > 0) { score += overdueDev * 0.08; drivers.push('Просрочено ИПР: ' + overdueDev); }
+      const iprDone = (e.development||[]).filter(d=>d.status==='выполнено').length;
+      const iprTotal = (e.development||[]).length;
+      if (iprTotal > 0 && (iprDone/iprTotal) < 0.4) { score += 0.12; drivers.push('ИПР выполнен < 40%'); }
+      const manScore = Number(e.managerRating && e.managerRating.score) || 3;
+      if (manScore <= 2) { score += 0.15; drivers.push('Низкая оценка руководителя (' + manScore + '/5)'); }
+      score = Math.min(1, score);
+      let level = 'low';
+      if (score >= 0.6) level = 'high';
+      else if (score >= 0.35) level = 'medium';
+      return { score: Math.round(score * 100), level, drivers };
+    }
+    function riskBadge(level, score) {
+      const cfg = {
+        high:   { label:'Высокий', bg:'rgba(220,38,38,0.12)',   color:'#991b1b', border:'rgba(220,38,38,0.25)' },
+        medium: { label:'Средний', bg:'rgba(217,119,6,0.12)',   color:'#92400e', border:'rgba(217,119,6,0.25)' },
+        low:    { label:'Низкий',  bg:'rgba(5,150,105,0.10)',   color:'#065f46', border:'rgba(5,150,105,0.20)' }
+      };
+      const c = cfg[level] || cfg.low;
+      return `<span style="background:${c.bg};color:${c.color};border:1px solid ${c.border};border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;">${c.label} ${score}%</span>`;
+    }
+
+    function capacityForecast(e, targetMonth) {
+      const year = targetMonth.getFullYear();
+      const month = targetMonth.getMonth();
+      const dim = daysInMonth(year, month);
+      const workDays = Math.round((dim * 5) / 7);
+      const ms = new Date(year, month, 1);
+      const me = new Date(year, month, dim);
+      let vacDays = 0;
+      (e.load && e.load.vacations || []).forEach(p => {
+        if (!p.from || !p.to) return;
+        const pf = new Date(p.from), pt = new Date(p.to);
+        if (!overlapsPeriod(pf, pt, ms, me)) return;
+        const from = pf < ms ? ms : pf, to = pt > me ? me : pt;
+        vacDays += Math.floor((to - from) / 864e5) + 1;
+      });
+      (e.load && e.load.sickLeaves || []).forEach(p => {
+        if (!p.from || !p.to) return;
+        const pf = new Date(p.from), pt = new Date(p.to);
+        if (!overlapsPeriod(pf, pt, ms, me)) return;
+        const from = pf < ms ? ms : pf, to = pt > me ? me : pt;
+        vacDays += Math.floor((to - from) / 864e5) + 1;
+      });
+      const realCap = Math.max(0, workDays - vacDays);
+      const plannedLoad = Math.round(realCap * ((Number(e.load && e.load.nextMonthPlan) || 0) / 100));
+      const free = Math.max(0, realCap - plannedLoad);
+      const risk = realCap === 0 ? 'none' : (free / realCap) < 0.2 ? 'high' : (free / realCap) < 0.4 ? 'med' : 'ok';
+      return { workDays, vacDays, realCap, plannedLoad, free, risk };
+    }
+
+    function busFactor() {
+      return state.employees.filter(e =>
+        (e.skills || []).filter(s => Number(s.level) >= 4).length < 2
+      ).length;
+    }
+    function overdueDensity() {
+      let total = 0, overdue = 0;
+      const todayStr = new Date().toISOString().slice(0,10);
+      state.employees.forEach(e => {
+        (e.tasks || []).forEach(t => {
+          if (t.status !== 'выполнена') {
+            total++;
+            if (t.due && t.due < todayStr) overdue++;
+          }
+        });
+      });
+      return total > 0 ? Math.round((overdue / total) * 100) : 0;
+    }
+
+    function buildAutoAgenda(e) {
+      const items = [];
+      const todayStr = new Date().toISOString().slice(0,10);
+      const fotM = monthDiff(e.salaryReviewDate);
+      if (fotM >= 10) items.push('Обсудить пересмотр ФОТ (' + fotM + ' мес. без изменений)');
+      const load = Number(e.load && e.load.currentPercent) || 0;
+      if (load > 90) items.push('Загрузка ' + load + '% — обсудить приоритеты');
+      const overdueTasks = (e.tasks||[]).filter(t=>t.status!=='выполнена'&&t.due&&t.due<todayStr);
+      if (overdueTasks.length) items.push('Просроченные задачи: ' + overdueTasks.length + ' шт.');
+      const overdueDev = (e.development||[]).filter(d=>d.status!=='выполнено'&&d.deadline&&d.deadline<todayStr);
+      if (overdueDev.length) items.push('Просроченные цели ИПР: ' + overdueDev.map(d=>d.zone).join(', '));
+      const rs = calcRiskScore(e);
+      if (rs.level === 'high') items.push('Высокий риск увольнения — обсудить мотивацию');
+      const openGoals = (e.goals||[]).filter(g=>g.status==='в работе'&&(Number(g.progress)||0)<30);
+      if (openGoals.length) items.push('Цели с низким прогрессом: ' + openGoals.length + ' шт.');
+      if (e.promotionReadiness === 'готов сейчас') items.push('Готов к повышению — обсудить план');
+      return items;
     }
 
     function renderBell() {
@@ -880,11 +986,12 @@
         const rows = await res.json();
         if (rows && rows[0] && rows[0].data && Array.isArray(rows[0].data.employees)) {
           const parsed = rows[0].data;
-          state.employees = parsed.employees.length ? parsed.employees : createDemoData();
+          state.employees = parsed.employees.length ? parsed.employees : [];
           state.selectedId = parsed.selectedId || (state.employees[0] && state.employees[0].id);
           if (parsed.teams && parsed.teams.length) state.teams = parsed.teams;
           if (parsed.personal) state.personal = parsed.personal;
           if (Array.isArray(parsed.projects)) state.projects = parsed.projects;
+          if (parsed.targetSkills) state.targetSkills = parsed.targetSkills;
           state.employees.forEach(ensureOneOnOneShape);
           state.employees.forEach(ensureEmployeeTeamHistory);
           hideLoadingBanner();
@@ -895,24 +1002,20 @@
       // Fallback to localStorage
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
-        state.employees = createDemoData();
-        state.employees.forEach(ensureOneOnOneShape);
-        state.employees.forEach(ensureEmployeeTeamHistory);
-        state.selectedId = state.employees[0].id;
+        state.employees = [];
+        state.selectedId = null;
         hideLoadingBanner();
         await saveState(); return;
       }
       try {
         const parsed = JSON.parse(raw);
-        state.employees = parsed.employees || createDemoData();
+        state.employees = parsed.employees || [];
         state.employees.forEach(ensureOneOnOneShape);
         state.employees.forEach(ensureEmployeeTeamHistory);
         state.selectedId = parsed.selectedId || (state.employees[0] && state.employees[0].id);
       } catch(e) {
-        state.employees = createDemoData();
-        state.employees.forEach(ensureOneOnOneShape);
-        state.employees.forEach(ensureEmployeeTeamHistory);
-        state.selectedId = state.employees[0].id;
+        state.employees = [];
+        state.selectedId = null;
       }
       hideLoadingBanner();
     }
@@ -955,7 +1058,7 @@
             'Prefer': 'return=minimal'
           },
           body: JSON.stringify({
-            data: { employees: state.employees, selectedId: state.selectedId, teams: state.teams, personal: state.personal, projects: state.projects },
+            data: { employees: state.employees, selectedId: state.selectedId, teams: state.teams, personal: state.personal, projects: state.projects, targetSkills: state.targetSkills },
             updated_at: new Date().toISOString()
           })
         });
@@ -1244,7 +1347,7 @@
       if (state.activeTab === "main") {
         ensureEmployeeTeamHistory(e);
         content = `<div class="grid-2">
-          ${inputField("ФИО","fullName",e.fullName)}
+          `<div class="field"><label>ФИО</label><input data-field="fullName" type="text" value="${escapeHtml(e.fullName)}" placeholder="Введите ФИО сотрудника" onfocus="if(this.value==='Новый сотрудник')this.value=''" /></div>`
           ${inputField("Должность","role",e.role)}
           ${inputField("Команда/стрим","team",e.team)}
           ${selectField("Грейд","grade",e.grade,gradeOptions)}
@@ -1424,7 +1527,7 @@
 
     function addEmployee() {
       const e = {
-        id:uid(), fullName:"Новый сотрудник", role:"", team:"Без команды", hireDate:"", salaryReviewDate:"",
+        id:uid(), fullName:"", role:"", team:"Без команды", hireDate:"", salaryReviewDate:"",
         salary:0, employeeNumber:"", positionId:"", location:"", email:"", teams:"", telegram:"", grade:"Junior", birthday:"",
         load:{currentDays:0,currentPercent:0,capacityMonth:20,status:"доступен",nextMonthPlan:0,vacations:[],sickLeaves:[],projects:[]},
         skills:[], development:[], managerRating:{score:3,comment:""}, projectHistory:[], salaryHistory:[],
@@ -1489,11 +1592,22 @@
 
       const renderEmpLink = e => `<button class="employee-link" data-open-employee="${e.id}">${escapeHtml(e.fullName)}</button>`;
 
+      const bf = busFactor();
+      const od = overdueDensity();
+      const highRiskAuto = employees.filter(e=>calcRiskScore(e).level==='high').length;
+      const today3 = new Date(); today3.setMonth(today3.getMonth()+1);
+      const nextMonthForecasts = employees.map(e=>capacityForecast(e, today3));
+      const highCapRisk = nextMonthForecasts.filter(f=>f.risk==='high').length;
       root.innerHTML = `
         <div class="kpi-grid">
           <div class="kpi good"><div>Всего сотрудников</div><div class="v">${employees.length}</div></div>
           <div class="kpi warn"><div>Средняя загрузка команды</div><div class="v">${avgLoadTotal}%</div></div>
           <div class="kpi ${openTasksCount>0?"danger":"good"}"><div>Открытых задач руководителя</div><div class="v">${openTasksCount}</div></div>
+        </div>
+        <div class="dash-grid-3">
+          <div class="kpi ${highRiskAuto>0?"danger":"good"}"><div>Авто-риск высокий</div><div class="v">${highRiskAuto}</div></div>
+          <div class="kpi ${bf>0?"warn":"good"}"><div>Bus factor риск</div><div class="v">${bf}</div></div>
+          <div class="kpi ${od>30?"danger":od>15?"warn":"good"}"><div>Просрочка задач</div><div class="v">${od}%</div></div>
         </div>
         <div class="dash-grid-3">
           <div class="kpi"><div>Сейчас в отпуске</div><div class="v">${employeesInVacationNow}</div></div>
@@ -1503,6 +1617,29 @@
           <div class="kpi ${avgGoalsProgress>=70?"good":avgGoalsProgress>=40?"warn":"danger"}"><div>Средний прогресс целей</div><div class="v">${avgGoalsProgress}%</div></div>
         </div>
         <div class="dash-grid">
+          <section class="panel">
+            <div class="section-title">Прогноз capacity — следующий месяц</div>
+            <table>
+              <thead><tr><th>Сотрудник</th><th>Команда</th><th>Рабочих дней</th><th>Отпуск/больн.</th><th>Реальный cap.</th><th>План загрузки</th><th>Свободно</th><th>Статус</th></tr></thead>
+              <tbody>
+                ${employees.map((e,i)=>{
+                  const f=nextMonthForecasts[i];
+                  const riskColor=f.risk==='high'?'var(--danger)':f.risk==='med'?'var(--warn)':'var(--ok)';
+                  const riskLabel=f.risk==='high'?'⚠ Перегруз':f.risk==='med'?'~ Напряжённо':'✓ Норма';
+                  return `<tr>
+                    <td><button class="employee-link" data-open-employee="${e.id}">${escapeHtml(e.fullName)}</button></td>
+                    <td>${escapeHtml(e.team)}</td>
+                    <td>${f.workDays}</td>
+                    <td>${f.vacDays>0?`<span style="color:var(--warn);">${f.vacDays}</span>`:'—'}</td>
+                    <td>${f.realCap}</td>
+                    <td>${f.plannedLoad}</td>
+                    <td style="font-weight:700;">${f.free}</td>
+                    <td style="color:${riskColor};font-weight:700;font-size:12px;">${riskLabel}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </section>
           <section class="panel"><div class="section-title">Блок 1 — Сводка по команде</div>
             <table><thead><tr><th>Команда/стрим</th><th>Сотрудников</th><th>Средняя загрузка</th></tr></thead><tbody>
               ${Object.entries(teams).sort((a,b)=>a[0].localeCompare(b[0],"ru")).map(([team,data])=>`<tr><td>${escapeHtml(team)}</td><td>${data.count}</td><td>${Math.round(data.loadSum/data.count)}%</td></tr>`).join("")||`<tr><td colspan="3" class="muted">Нет данных</td></tr>`}
@@ -1671,7 +1808,24 @@
             ${employees.map(e=>{ const m=skillMapByEmp.get(e.id)||{}; return `<tr><td>${toSkillsLink(e)}</td>${skillColumns.map(s=>{ const lvl=Number(m[s]||0); if (!lvl) return `<td class="muted" style="text-align:center;">-</td>`; const cls=lvl<=2?"skill-lvl-low":lvl===3?"skill-lvl-mid":"skill-lvl-high"; return `<td class="${cls}">${lvl}</td>`; }).join("")}</tr>`; }).join("")||`<tr><td class="muted">Нет данных</td></tr>`}
           </tbody></table>
         </section>
-        <section class="panel"><div class="section-title">Блок 3 — Готовность к повышению</div>
+        <section class="panel">
+          <div class="section-title">Блок 2б — Skill gap анализ</div>
+          <div class="muted" style="font-size:12px;margin-bottom:10px;">Целевые уровни настраиваются в разделе Настройки → Целевые навыки</div>
+          ${skillColumns.length ? `<table>
+            <thead><tr><th>Навык</th><th>Ср. уровень команды</th><th>Целевой уровень</th><th>Gap</th></tr></thead>
+            <tbody>
+              ${skillColumns.map(s=>{
+                const vals = employees.map(e=>(skillMapByEmp.get(e.id)||{})[s]).filter(v=>v>0);
+                const avg = vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : '—';
+                const target = state.targetSkills && state.targetSkills[s] ? state.targetSkills[s] : '—';
+                const gap = (target!=='—'&&avg!=='—') ? (Number(avg)-Number(target)).toFixed(1) : '—';
+                const gapColor = gap==='—'?'var(--muted)':Number(gap)>=0?'var(--ok)':'var(--danger)';
+                return `<tr><td>${escapeHtml(s)}</td><td>${avg}</td><td><input type="number" min="1" max="5" value="${target==='—'?'':target}" placeholder="1-5" data-skill-target="${escapeHtml(s)}" style="width:60px;text-align:center;"></td><td style="color:${gapColor};font-weight:700;">${gap==='—'?'—':(Number(gap)>=0?'+':'')+gap}</td></tr>`;
+              }).join('')}
+            </tbody>
+          </table>` : '<div class="muted">Добавьте навыки сотрудникам чтобы увидеть gap</div>'}
+        </section>
+      <section class="panel"><div class="section-title">Блок 3 — Готовность к повышению</div>
           <div class="dev-columns">
             <div><div class="section-title"><span class="badge good">Готов сейчас</span></div><div class="dash-card-list">${readyNow.map(e=>`<div class="dash-item good">${toSkillsLink(e)}<br><span class="muted">${escapeHtml(e.role)} · ${escapeHtml(e.grade)}</span><br><span class="muted">${escapeHtml((e.managerRating&&e.managerRating.comment)||"—")}</span></div>`).join("")||`<div class="muted">Нет сотрудников</div>`}</div></div>
             <div><div class="section-title"><span class="badge warn">В перспективе</span></div><div class="dash-card-list">${readySoon.map(e=>`<div class="dash-item warn">${toSkillsLink(e)}<br><span class="muted">${escapeHtml(e.role)} · ${escapeHtml(e.grade)}</span><br><span class="muted">${escapeHtml((e.managerRating&&e.managerRating.comment)||"—")}</span></div>`).join("")||`<div class="muted">Нет сотрудников</div>`}</div></div>
@@ -1952,6 +2106,13 @@
       if (el.getAttribute('data-proj-rlvl')!==null) { const [pi,ri]=el.getAttribute('data-proj-rlvl').split('-').map(Number); state.projects[pi].risks[ri].level=el.value; saveState(); renderProjects(); return; }
       if (el.getAttribute('data-proj-rtext')!==null) { const [pi,ri]=el.getAttribute('data-proj-rtext').split('-').map(Number); state.projects[pi].risks[ri].text=el.value; debounceSave(); return; }
 
+      if (el.getAttribute('data-skill-target') !== null) {
+        const skill = el.getAttribute('data-skill-target');
+        if (!state.targetSkills) state.targetSkills = {};
+        state.targetSkills[skill] = el.value ? Number(el.value) : null;
+        debounceSave();
+        return;
+      }
       if (el.dataset.importMap) { if (!state.importDraft) return; state.importDraft.mapping[el.dataset.importMap]=el.value===""?"":Number(el.value); return; }
       if (el.id==="searchInput") { state.filters.search=el.value; renderEmployeeList(); return; }
       if (el.id==="sortSelect") { state.filters.sort=el.value; renderEmployeeList(); return; }
@@ -1969,14 +2130,14 @@
           }
           if (val&&!state.teams.some(t=>t.name===val)) { state.teams.push({id:uid(),name:String(val),color:defaultTeamColor(state.teams.length)}); saveTeams(); }
         }
-        const isTextField = el.type==="text"||el.type==="email"||el.tagName==="TEXTAREA";
-        if (["fullName","role","team","salaryReviewDate","load.currentPercent","load.currentDays"].includes(path)) renderEmployeeList();
+        const isTextField = el.type==="text"||el.type==="email"||el.type==="number"||el.tagName==="TEXTAREA";
+        if (["fullName","role","salaryReviewDate","load.currentPercent","load.currentDays"].includes(path)) { debounceSave(); renderEmployeeList(); return; }
         if (path==="team") { renderTeamCounters(); saveState(); renderEmployeePanel(); return; }
         if (isTextField) { debounceSave(); } else { saveState(); renderEmployeePanel(); }
       }
       if (el.dataset.listItem) {
         const path=el.dataset.listItem;
-        const isTextField = el.type==="text"||el.type==="email"||el.tagName==="TEXTAREA";
+        const isTextField = el.type==="text"||el.type==="email"||el.type==="number"||el.tagName==="TEXTAREA";
         setByPath(employee,path,autoTyped(el.value,el.type));
         if (isTextField) { debounceSave(); } else { saveState(); renderEmployeePanel(); }
       }
@@ -1987,6 +2148,58 @@
     document.getElementById("sortSelect").addEventListener("change",e=>{ state.filters.sort=e.target.value; renderEmployeeList(); });
     document.getElementById("searchInput").addEventListener("input",e=>{ state.filters.search=e.target.value; renderEmployeeList(); });
     document.getElementById("importFileInput").addEventListener("change",e=>{ const file=e.target.files&&e.target.files[0]; startImportFlow(file); e.target.value=""; });
+
+
+    // ─── HOTKEYS ───────────────────────────────────────────────────
+    let _hotkeyBuf = '';
+    let _hotkeyTimer = null;
+    document.addEventListener('keydown', ev => {
+      // Ignore if typing in input/textarea/select
+      const tag = ev.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      const k = ev.key.toLowerCase();
+      // Single keys
+      if (k === 'n' && !ev.metaKey && !ev.ctrlKey) { addEmployee(); return; }
+      if (k === '?' ) { showHotkeysHelp(); return; }
+      // Tab shortcuts 1-8
+      if (/^[1-8]$/.test(k) && state.screen === 'crm' && state.selectedId) {
+        const tabIds = ['main','load','skills','projects','extra','tasks','onetoone','goals'];
+        state.activeTab = tabIds[+k - 1];
+        renderEmployeePanel();
+        return;
+      }
+      // g + key combos
+      _hotkeyBuf += k;
+      if (_hotkeyTimer) clearTimeout(_hotkeyTimer);
+      _hotkeyTimer = setTimeout(() => { _hotkeyBuf = ''; }, 600);
+      if (_hotkeyBuf === 'ge') { state.screen='crm'; renderAll(); _hotkeyBuf=''; }
+      else if (_hotkeyBuf === 'gd') { state.screen='dashboard'; renderAll(); _hotkeyBuf=''; }
+      else if (_hotkeyBuf === 'gp') { state.screen='projects'; renderProjects(); renderAll(); _hotkeyBuf=''; }
+      else if (_hotkeyBuf === 'gl') { state.screen='personal'; renderPersonal(); renderAll(); _hotkeyBuf=''; }
+      else if (_hotkeyBuf === 'gc') { state.screen='calendar'; renderAll(); _hotkeyBuf=''; }
+      else if (_hotkeyBuf === 'gv') { state.screen='development'; renderAll(); _hotkeyBuf=''; }
+    });
+    function showHotkeysHelp() {
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(6px);z-index:500;display:flex;align-items:center;justify-content:center;';
+      overlay.innerHTML = `<div style="background:rgba(255,255,255,0.92);border-radius:18px;padding:24px 28px;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(15,23,42,0.15);border:1px solid rgba(255,255,255,0.7);">
+        <div style="font-size:15px;font-weight:700;margin-bottom:16px;">⌨ Горячие клавиши</div>
+        <table style="width:100%;font-size:13px;">
+          <tr><td style="padding:4px 8px;font-family:monospace;background:rgba(0,0,0,0.06);border-radius:5px;width:80px;">g + e</td><td style="padding:4px 8px;">Сотрудники (CRM)</td></tr>
+          <tr><td style="padding:4px 8px;font-family:monospace;background:rgba(0,0,0,0.06);border-radius:5px;">g + d</td><td style="padding:4px 8px;">Дашборд</td></tr>
+          <tr><td style="padding:4px 8px;font-family:monospace;background:rgba(0,0,0,0.06);border-radius:5px;">g + p</td><td style="padding:4px 8px;">Проекты</td></tr>
+          <tr><td style="padding:4px 8px;font-family:monospace;background:rgba(0,0,0,0.06);border-radius:5px;">g + l</td><td style="padding:4px 8px;">Личное</td></tr>
+          <tr><td style="padding:4px 8px;font-family:monospace;background:rgba(0,0,0,0.06);border-radius:5px;">g + c</td><td style="padding:4px 8px;">Календарь</td></tr>
+          <tr><td style="padding:4px 8px;font-family:monospace;background:rgba(0,0,0,0.06);border-radius:5px;">g + v</td><td style="padding:4px 8px;">Развитие</td></tr>
+          <tr><td style="padding:4px 8px;font-family:monospace;background:rgba(0,0,0,0.06);border-radius:5px;">1 … 8</td><td style="padding:4px 8px;">Вкладки карточки</td></tr>
+          <tr><td style="padding:4px 8px;font-family:monospace;background:rgba(0,0,0,0.06);border-radius:5px;">n</td><td style="padding:4px 8px;">Новый сотрудник</td></tr>
+          <tr><td style="padding:4px 8px;font-family:monospace;background:rgba(0,0,0,0.06);border-radius:5px;">?</td><td style="padding:4px 8px;">Эта подсказка</td></tr>
+        </table>
+        <div style="text-align:right;margin-top:16px;"><button onclick="this.closest('[style]').remove()" style="padding:7px 16px;">Закрыть</button></div>
+      </div>`;
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+      document.body.appendChild(overlay);
+    }
 
     loadReadNotifs();
     (async () => {
