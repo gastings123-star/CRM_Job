@@ -1347,7 +1347,7 @@
       if (state.activeTab === "main") {
         ensureEmployeeTeamHistory(e);
         content = `<div class="grid-2">
-          `<div class="field"><label>ФИО</label><input data-field="fullName" type="text" value="${escapeHtml(e.fullName)}" placeholder="Введите ФИО сотрудника" onfocus="if(this.value==='Новый сотрудник')this.value=''" /></div>`
+          <div class="field"><label>ФИО</label><input data-field="fullName" type="text" value="${escapeHtml(e.fullName)}" placeholder="Введите ФИО сотрудника" /></div>
           ${inputField("Должность","role",e.role)}
           ${inputField("Команда/стрим","team",e.team)}
           ${selectField("Грейд","grade",e.grade,gradeOptions)}
