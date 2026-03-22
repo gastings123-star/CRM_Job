@@ -659,33 +659,16 @@
       return `<span style="background:${c.bg};color:${c.color};border:1px solid ${c.border};border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;">${c.label} ${score}%</span>`;
     }
 
-    function capacityForecast(e, targetMonth) {
-      const year = targetMonth.getFullYear();
-      const month = targetMonth.getMonth();
-      const dim = daysInMonth(year, month);
-      const workDays = Math.round((dim * 5) / 7);
-      const ms = new Date(year, month, 1);
-      const me = new Date(year, month, dim);
-      let vacDays = 0;
-      (e.load && e.load.vacations || []).forEach(p => {
-        if (!p.from || !p.to) return;
-        const pf = new Date(p.from), pt = new Date(p.to);
-        if (!overlapsPeriod(pf, pt, ms, me)) return;
-        const from = pf < ms ? ms : pf, to = pt > me ? me : pt;
-        vacDays += Math.floor((to - from) / 864e5) + 1;
-      });
-      (e.load && e.load.sickLeaves || []).forEach(p => {
-        if (!p.from || !p.to) return;
-        const pf = new Date(p.from), pt = new Date(p.to);
-        if (!overlapsPeriod(pf, pt, ms, me)) return;
-        const from = pf < ms ? ms : pf, to = pt > me ? me : pt;
-        vacDays += Math.floor((to - from) / 864e5) + 1;
-      });
-      const realCap = Math.max(0, workDays - vacDays);
-      const plannedLoad = Math.round(realCap * ((Number(e.load && e.load.nextMonthPlan) || 0) / 100));
-      const free = Math.max(0, realCap - plannedLoad);
-      const risk = realCap === 0 ? 'none' : (free / realCap) < 0.2 ? 'high' : (free / realCap) < 0.4 ? 'med' : 'ok';
-      return { workDays, vacDays, realCap, plannedLoad, free, risk };
+    function capacityForecast(e) {
+      const label = e.load && e.load.capacityQtr ? e.load.capacityQtr : currentQuarterLabel();
+      const totalCap = Number(e.load && e.load.capacityQuarter) || quarterWorkDays(label);
+      const vacDays = vacDaysInQuarter(e, label);
+      const realCap = Math.max(0, totalCap - vacDays);
+      const usedPct = Number(e.load && e.load.currentPercent) || 0;
+      const usedDays = Number(e.load && e.load.currentDays) || 0;
+      const free = Math.max(0, realCap - usedDays);
+      const risk = totalCap === 0 ? 'none' : (free / totalCap) < 0.15 ? 'high' : (free / totalCap) < 0.35 ? 'med' : 'ok';
+      return { label, totalCap, vacDays, realCap, usedDays, free, risk };
     }
 
     function busFactor() {
@@ -724,6 +707,46 @@
       if (openGoals.length) items.push('Цели с низким прогрессом: ' + openGoals.length + ' шт.');
       if (e.promotionReadiness === 'готов сейчас') items.push('Готов к повышению — обсудить план');
       return items;
+    }
+
+
+    function currentQuarterLabel() {
+      const now = new Date();
+      const q = Math.floor(now.getMonth() / 3) + 1;
+      return 'Q' + q + ' ' + now.getFullYear();
+    }
+    function quarterMonths(label) {
+      // Returns array of Date objects for first day of each month in the quarter
+      const m = label.match(/Q(\d) (\d{4})/);
+      if (!m) return [];
+      const q = +m[1], y = +m[2];
+      const startMonth = (q - 1) * 3;
+      return [0,1,2].map(i => new Date(y, startMonth + i, 1));
+    }
+    function quarterWorkDays(label) {
+      const months = quarterMonths(label);
+      return months.reduce((sum, m) => {
+        const dim = daysInMonth(m.getFullYear(), m.getMonth());
+        return sum + Math.round((dim * 5) / 7);
+      }, 0);
+    }
+    function vacDaysInQuarter(e, label) {
+      const months = quarterMonths(label);
+      if (!months.length) return 0;
+      const qStart = months[0];
+      const lastMonth = months[months.length - 1];
+      const qEnd = new Date(lastMonth.getFullYear(), lastMonth.getMonth() + 1, 0);
+      let days = 0;
+      const periods = [...(e.load.vacations||[]), ...(e.load.sickLeaves||[])];
+      periods.forEach(p => {
+        if (!p.from || !p.to) return;
+        const pf = new Date(p.from), pt = new Date(p.to);
+        if (!overlapsPeriod(pf, pt, qStart, qEnd)) return;
+        const from = pf < qStart ? qStart : pf;
+        const to = pt > qEnd ? qEnd : pt;
+        days += Math.floor((to - from) / 864e5) + 1;
+      });
+      return days;
     }
 
     function renderBell() {
@@ -920,7 +943,7 @@
     function createDemoData() {
       return [
         { id:uid(), fullName:"Иван Петров", role:"Руководитель разработки", team:"Core Platform", hireDate:"2021-02-15", salaryReviewDate:"2025-03-01", salary:420000, employeeNumber:"EMP-001", positionId:"POS-LEAD-17", location:"Москва", email:"i.petrov@corp.local", teams:"@ivan.petrov", telegram:"@ipetrov", grade:"Lead", birthday:"1988-03-21",
-          load:{ currentDays:17, currentPercent:85, capacityMonth:20, status:"частично", nextMonthPlan:75, vacations:[{from:"2026-05-10",to:"2026-05-20"}], sickLeaves:[{from:"2026-01-16",to:"2026-01-19"}], projects:["CRM трансформация","Единая платформа отчётности"] },
+          load:{ currentDays:17, currentPercent:85, capacityQuarter:20, status:"частично", nextMonthPlan:75, vacations:[{from:"2026-05-10",to:"2026-05-20"}], sickLeaves:[{from:"2026-01-16",to:"2026-01-19"}], projects:["CRM трансформация","Единая платформа отчётности"] },
           skills:[{name:"People management",level:5,comment:"Сильная фасилитация"},{name:"System design",level:4,comment:"Глубокое понимание архитектуры"}],
           development:[{zone:"Финансовое планирование",activities:"Курс + шэдоуинг",deadline:"2026-07-01",mentor:"Ольга Соколова",status:"в работе"}],
           managerRating:{score:5,comment:"Стабильно высокий результат, лидер команды."},
@@ -931,7 +954,7 @@
           risk:{level:"низкий",comment:"Высокая вовлечённость."}, promotionReadiness:"готов сейчас", workPreference:"гибрид",
           tasks:[{text:"Провести 1-on-1",due:"2026-03-28",status:"открыта"}] },
         { id:uid(), fullName:"Мария Смирнова", role:"Senior Backend Engineer", team:"Payments Stream", hireDate:"2020-08-03", salaryReviewDate:"2024-12-01", salary:310000, employeeNumber:"EMP-002", positionId:"POS-SR-02", location:"Санкт-Петербург", email:"m.smirnova@corp.local", teams:"@maria.smirnova", telegram:"@maria_s", grade:"Senior", birthday:"",
-          load:{ currentDays:20, currentPercent:100, capacityMonth:20, status:"доступен", nextMonthPlan:90, vacations:[{from:"2026-08-01",to:"2026-08-14"}], sickLeaves:[], projects:["Миграция платёжного ядра"] },
+          load:{ currentDays:20, currentPercent:100, capacityQuarter:20, status:"доступен", nextMonthPlan:90, vacations:[{from:"2026-08-01",to:"2026-08-14"}], sickLeaves:[], projects:["Миграция платёжного ядра"] },
           skills:[{name:"Java/Kotlin",level:5,comment:"Экспертный уровень"},{name:"Mentoring",level:4,comment:"Ведёт двух мидлов"}],
           development:[{zone:"Архитектурное лидерство",activities:"Ведение дизайн-ревью",deadline:"2026-09-15",mentor:"Иван Петров",status:"в работе"}],
           managerRating:{score:4,comment:"Очень сильный инженер, растёт как техлид."},
@@ -942,7 +965,7 @@
           risk:{level:"средний",comment:"Высокая нагрузка последний квартал."}, promotionReadiness:"в перспективе", workPreference:"удалённо",
           tasks:[{text:"Обсудить повышение",due:"2026-04-02",status:"открыта"}] },
         { id:uid(), fullName:"Алексей Волков", role:"Product Analyst", team:"Growth Stream", hireDate:"2022-06-10", salaryReviewDate:"2025-05-10", salary:240000, employeeNumber:"EMP-003", positionId:"POS-AN-11", location:"Казань", email:"a.volkov@corp.local", teams:"@alex.volkov", telegram:"@volkov_analytics", grade:"Middle", birthday:"",
-          load:{ currentDays:13, currentPercent:65, capacityMonth:20, status:"доступен", nextMonthPlan:70, vacations:[{from:"2026-04-15",to:"2026-04-22"}], sickLeaves:[], projects:["A/B платформа","Retention dashboard"] },
+          load:{ currentDays:13, currentPercent:65, capacityQuarter:20, status:"доступен", nextMonthPlan:70, vacations:[{from:"2026-04-15",to:"2026-04-22"}], sickLeaves:[], projects:["A/B платформа","Retention dashboard"] },
           skills:[{name:"SQL",level:5,comment:"Сильный аналитик"},{name:"Product thinking",level:4,comment:"Хорошо формирует гипотезы"}],
           development:[{zone:"Презентации для C-level",activities:"Курс сторителлинга",deadline:"2026-06-20",mentor:"Елена Котова",status:"в работе"}],
           managerRating:{score:4,comment:"Стабильно закрывает аналитические задачи."},
@@ -953,7 +976,7 @@
           risk:{level:"низкий",comment:"Стабильная мотивация."}, promotionReadiness:"в перспективе", workPreference:"гибрид",
           tasks:[{text:"Дать обратную связь по презентации",due:"2026-03-26",status:"открыта"}] },
         { id:uid(), fullName:"Екатерина Морозова", role:"QA Lead", team:"Core Platform", hireDate:"2019-11-01", salaryReviewDate:"2024-10-15", salary:295000, employeeNumber:"EMP-004", positionId:"POS-QA-LEAD", location:"Новосибирск", email:"e.morozova@corp.local", teams:"@ekaterina.qa", telegram:"@kat_qa", grade:"Lead", birthday:"",
-          load:{ currentDays:19, currentPercent:95, capacityMonth:20, status:"частично", nextMonthPlan:80, vacations:[{from:"2026-03-15",to:"2026-03-23"}], sickLeaves:[], projects:["Тестовая стратегия платформы","Автоматизация регрессии"] },
+          load:{ currentDays:19, currentPercent:95, capacityQuarter:20, status:"частично", nextMonthPlan:80, vacations:[{from:"2026-03-15",to:"2026-03-23"}], sickLeaves:[], projects:["Тестовая стратегия платформы","Автоматизация регрессии"] },
           skills:[{name:"Test automation",level:5,comment:"Эксперт по e2e"},{name:"Leadership",level:4,comment:"Сильный QA-лид"}],
           development:[{zone:"Performance testing",activities:"Внедрение k6 практик",deadline:"2026-08-30",mentor:"Иван Петров",status:"в работе"}],
           managerRating:{score:5,comment:"Высокая надёжность и качество релизов."},
@@ -964,7 +987,7 @@
           risk:{level:"низкий",comment:"Надёжный ключевой сотрудник."}, promotionReadiness:"готов сейчас", workPreference:"удалённо",
           tasks:[{text:"Обсудить ресурсный план QA",due:"2026-03-29",status:"открыта"}] },
         { id:uid(), fullName:"Дмитрий Кузнецов", role:"Frontend Engineer", team:"Growth Stream", hireDate:"2023-01-20", salaryReviewDate:"2025-06-01", salary:205000, employeeNumber:"EMP-005", positionId:"POS-FE-09", location:"Екатеринбург", email:"d.kuznetsov@corp.local", teams:"@dima.front", telegram:"@dima_fe", grade:"Middle", birthday:"",
-          load:{ currentDays:10, currentPercent:50, capacityMonth:20, status:"доступен", nextMonthPlan:65, vacations:[], sickLeaves:[{from:"2026-03-20",to:"2026-03-24"}], projects:["Новый onboarding flow"] },
+          load:{ currentDays:10, currentPercent:50, capacityQuarter:20, status:"доступен", nextMonthPlan:65, vacations:[], sickLeaves:[{from:"2026-03-20",to:"2026-03-24"}], projects:["Новый onboarding flow"] },
           skills:[{name:"React",level:4,comment:"Уверенный middle"},{name:"Accessibility",level:3,comment:"Есть прогресс"}],
           development:[{zone:"System design FE",activities:"Архитектурные RFC",deadline:"2026-11-01",mentor:"Мария Смирнова",status:"в работе"}],
           managerRating:{score:3,comment:"Хороший темп, нужен рост по качеству."},
@@ -1370,12 +1393,34 @@
         </tbody></table>`;
       }
       if (state.activeTab === "load") {
-        content = `<div class="grid-3">
-          ${inputField("Текущая загрузка (ЧД)","load.currentDays",e.load.currentDays,"number")}
-          ${inputField("Текущая загрузка (%)","load.currentPercent",e.load.currentPercent,"number")}
-          ${inputField("Capacity (ЧД/мес)","load.capacityMonth",e.load.capacityMonth,"number")}
+        const capQtr = e.load.capacityQtr || currentQuarterLabel();
+        const qWorkDays = quarterWorkDays(capQtr);
+        const capQ = Number(e.load.capacityQuarter) || 0;
+        const usedDays = Number(e.load.currentDays) || 0;
+        const autoPct = capQ > 0 ? Math.round((usedDays / capQ) * 100) : 0;
+        const qtrOpts = ["Q1 2025","Q2 2025","Q3 2025","Q4 2025","Q1 2026","Q2 2026","Q3 2026","Q4 2026","Q1 2027","Q2 2027","Q3 2027","Q4 2027"];
+        content = `
+        <div class="grid-3" style="margin-bottom:10px;">
+          <div class="field"><label>Квартал</label>
+            <select data-field="load.capacityQtr">
+              ${qtrOpts.map(q=>`<option value="${q}" ${capQtr===q?"selected":""}>${q}</option>`).join("")}
+            </select>
+          </div>
+          <div class="field"><label>Capacity на квартал (ЧД)</label>
+            <input type="number" min="0" data-field="load.capacityQuarter" value="${capQ}" placeholder="напр. 55" />
+          </div>
+          <div class="field"><label>Рабочих дней в квартале</label>
+            <div class="calc">${qWorkDays} дн. по календарю</div>
+          </div>
+        </div>
+        <div class="grid-3" style="margin-bottom:10px;">
+          <div class="field"><label>Занято дней</label>
+            <input type="number" min="0" data-field="load.currentDays" value="${usedDays}" />
+          </div>
+          <div class="field"><label>Загрузка % <span style="font-size:10px;color:var(--ok);">авто</span></label>
+            <div class="calc" style="font-size:16px;font-weight:700;color:${autoPct>100?"var(--danger)":autoPct>80?"var(--warn)":"var(--ok)"};">${autoPct}%<span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px;">${usedDays} из ${capQ} ЧД</span></div>
+          </div>
           ${selectField("Статус доступности","load.status",e.load.status,availabilityOptions)}
-          ${inputField("План загрузки след. мес (%)","load.nextMonthPlan",e.load.nextMonthPlan,"number")}
         </div>
         <div class="section-title">Проекты/эпики</div>
         ${tableFromRows(["Проект/эпик",""],e.load.projects.map((pr,i)=>`<tr><td><input data-list-item="load.projects.${i}" value="${escapeHtml(pr)}" /></td><td class="row-actions"><button data-del-row="project.${i}">Удалить</button></td></tr>`).join(""),"project","Добавить проект/эпик")}
@@ -1529,7 +1574,7 @@
       const e = {
         id:uid(), fullName:"", role:"", team:"Без команды", hireDate:"", salaryReviewDate:"",
         salary:0, employeeNumber:"", positionId:"", location:"", email:"", teams:"", telegram:"", grade:"Junior", birthday:"",
-        load:{currentDays:0,currentPercent:0,capacityMonth:20,status:"доступен",nextMonthPlan:0,vacations:[],sickLeaves:[],projects:[]},
+        load:{currentDays:0,currentPercent:0,capacityQuarter:0,capacityQtr:currentQuarterLabel(),status:"доступен",nextMonthPlan:0,vacations:[],sickLeaves:[],projects:[]},
         skills:[], development:[], managerRating:{score:3,comment:""}, projectHistory:[], salaryHistory:[],
         hobbies:"", managerComments:[], documents:[], risk:{level:"низкий",comment:""}, promotionReadiness:"не готов",
         workPreference:"гибрид", tasks:[],
@@ -1595,8 +1640,7 @@
       const bf = busFactor();
       const od = overdueDensity();
       const highRiskAuto = employees.filter(e=>calcRiskScore(e).level==='high').length;
-      const today3 = new Date(); today3.setMonth(today3.getMonth()+1);
-      const nextMonthForecasts = employees.map(e=>capacityForecast(e, today3));
+      const nextMonthForecasts = employees.map(e=>capacityForecast(e));
       const highCapRisk = nextMonthForecasts.filter(f=>f.risk==='high').length;
       root.innerHTML = `
         <div class="kpi-grid">
@@ -1620,7 +1664,7 @@
           <section class="panel">
             <div class="section-title">Прогноз capacity — следующий месяц</div>
             <table>
-              <thead><tr><th>Сотрудник</th><th>Команда</th><th>Рабочих дней</th><th>Отпуск/больн.</th><th>Реальный cap.</th><th>План загрузки</th><th>Свободно</th><th>Статус</th></tr></thead>
+              <thead><tr><th>Сотрудник</th><th>Команда</th><th>Квартал</th><th>Capacity (ЧД)</th><th>Отпуск/больн.</th><th>Реальный cap.</th><th>Занято</th><th>Свободно</th><th>Статус</th></tr></thead>
               <tbody>
                 ${employees.map((e,i)=>{
                   const f=nextMonthForecasts[i];
@@ -1629,11 +1673,12 @@
                   return `<tr>
                     <td><button class="employee-link" data-open-employee="${e.id}">${escapeHtml(e.fullName)}</button></td>
                     <td>${escapeHtml(e.team)}</td>
-                    <td>${f.workDays}</td>
+                    <td>${f.label}</td>
+                    <td>${f.totalCap}</td>
                     <td>${f.vacDays>0?`<span style="color:var(--warn);">${f.vacDays}</span>`:'—'}</td>
                     <td>${f.realCap}</td>
-                    <td>${f.plannedLoad}</td>
-                    <td style="font-weight:700;">${f.free}</td>
+                    <td>${f.usedDays}</td>
+                    <td style="font-weight:700;color:${riskColor};">${f.free}</td>
                     <td style="color:${riskColor};font-weight:700;font-size:12px;">${riskLabel}</td>
                   </tr>`;
                 }).join('')}
@@ -1912,7 +1957,7 @@
           hireDate:String(row[map.hireDate]||"").trim(), salaryReviewDate:"", salary:Number(row[map.salary]||0),
           employeeNumber:String(row[map.employeeNumber]||"").trim(), positionId:"", location:String(row[map.location]||"").trim(),
           email:String(row[map.email]||"").trim(), teams:"", telegram:"", grade:String(row[map.grade]||"Junior").trim()||"Junior",
-          load:{currentDays:0,currentPercent:0,capacityMonth:20,status:"доступен",nextMonthPlan:0,vacations:[],sickLeaves:[],projects:[]},
+          load:{currentDays:0,currentPercent:0,capacityQuarter:0,capacityQtr:currentQuarterLabel(),status:"доступен",nextMonthPlan:0,vacations:[],sickLeaves:[],projects:[]},
           skills:[], development:[], managerRating:{score:3,comment:""}, projectHistory:[], salaryHistory:[],
           hobbies:"", managerComments:[], documents:[], risk:{level:"низкий",comment:""}, promotionReadiness:"не готов",
           workPreference:"гибрид", tasks:[],
@@ -1932,7 +1977,7 @@
 
     function exportCsv() {
       const headers=["ФИО","Должность","Команда","Грейд","Дата приёма","Стаж","Дата пересмотра ФОТ","Мес после пересмотра","Оклад","Статус доступности","Текущая загрузка %","Capacity ЧД","Риск","Готовность к повышению","Локация","Email"];
-      const rows=state.employees.map(e=>[e.fullName,e.role,e.team,e.grade,e.hireDate,tenure(e.hireDate),e.salaryReviewDate,monthDiff(e.salaryReviewDate),e.salary,e.load.status,e.load.currentPercent,e.load.capacityMonth,e.risk.level,e.promotionReadiness,e.location,e.email]);
+      const rows=state.employees.map(e=>[e.fullName,e.role,e.team,e.grade,e.hireDate,tenure(e.hireDate),e.salaryReviewDate,monthDiff(e.salaryReviewDate),e.salary,e.load.status,e.load.currentPercent,(e.load.capacityQtr||"")+": "+(e.load.capacityQuarter||0)+" ЧД",e.risk.level,e.promotionReadiness,e.location,e.email]);
       const csv=[headers,...rows].map(r=>r.map(cell=>`"${String(cell??"").replaceAll('"','""')}"`).join(";")).join("\n");
       const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8;"});
       const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="staff-crm-export.csv"; a.click(); URL.revokeObjectURL(a.href);
@@ -2131,7 +2176,16 @@
           if (val&&!state.teams.some(t=>t.name===val)) { state.teams.push({id:uid(),name:String(val),color:defaultTeamColor(state.teams.length)}); saveTeams(); }
         }
         const isTextField = el.type==="text"||el.type==="email"||el.type==="number"||el.type==="date"||el.tagName==="TEXTAREA";
-        if (["fullName","role","salaryReviewDate","load.currentPercent","load.currentDays"].includes(path)) { debounceSave(); renderEmployeeList(); return; }
+        // Auto-calculate percent when days or capacity changes
+        if (path==="load.currentDays" || path==="load.capacityQuarter") {
+          const emp2 = selectedEmployee();
+          if (emp2) {
+            const days = Number(emp2.load.currentDays) || 0;
+            const cap = Number(emp2.load.capacityQuarter) || 0;
+            if (cap > 0) emp2.load.currentPercent = Math.round((days / cap) * 100);
+          }
+        }
+        if (["fullName","role","salaryReviewDate","load.currentDays","load.capacityQuarter"].includes(path)) { debounceSave(); renderEmployeeList(); return; }
         if (path==="team") { renderTeamCounters(); saveState(); renderEmployeePanel(); return; }
         if (isTextField) { debounceSave(); } else { saveState(); renderEmployeePanel(); }
       }
