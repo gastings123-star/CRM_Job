@@ -931,14 +931,34 @@
       ];
     }
 
-    function loadState() {
+    async function loadState() {
+      showLoadingBanner('Загрузка данных из облака...');
+      try {
+        const res = await fetch(SUPABASE_URL + '/rest/v1/crm_state?id=eq.main&select=data', {
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+        });
+        const rows = await res.json();
+        if (rows && rows[0] && rows[0].data && Array.isArray(rows[0].data.employees)) {
+          const parsed = rows[0].data;
+          state.employees = parsed.employees.length ? parsed.employees : createDemoData();
+          state.selectedId = parsed.selectedId || (state.employees[0] && state.employees[0].id);
+          if (parsed.teams && parsed.teams.length) state.teams = parsed.teams;
+          state.employees.forEach(ensureOneOnOneShape);
+          state.employees.forEach(ensureEmployeeTeamHistory);
+          hideLoadingBanner();
+          return;
+        }
+      } catch(e) { console.warn('Supabase load failed, using localStorage:', e); }
+
+      // Fallback to localStorage
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) {
         state.employees = createDemoData();
         state.employees.forEach(ensureOneOnOneShape);
         state.employees.forEach(ensureEmployeeTeamHistory);
         state.selectedId = state.employees[0].id;
-        saveState(); return;
+        hideLoadingBanner();
+        await saveState(); return;
       }
       try {
         const parsed = JSON.parse(raw);
@@ -952,6 +972,7 @@
         state.employees.forEach(ensureEmployeeTeamHistory);
         state.selectedId = state.employees[0].id;
       }
+      hideLoadingBanner();
     }
 
     function showLoadingBanner(msg) {
@@ -967,6 +988,11 @@
       if(!s) return;
       s.classList.add('show');
       setTimeout(()=>s.classList.remove('show'), 2000);
+    }
+    let _saveTimer = null;
+    function debounceSave() {
+      if (_saveTimer) clearTimeout(_saveTimer);
+      _saveTimer = setTimeout(() => { saveState(); }, 1500);
     }
 
     const SUPABASE_URL = 'https://aklmwqacsdlndyyvjqus.supabase.co';
@@ -1706,15 +1732,16 @@
           }
           if (val&&!state.teams.some(t=>t.name===val)) { state.teams.push({id:uid(),name:String(val),color:defaultTeamColor(state.teams.length)}); saveTeams(); }
         }
+        const isTextField = el.type==="text"||el.type==="email"||el.tagName==="TEXTAREA";
         if (["fullName","role","team","salaryReviewDate","load.currentPercent","load.currentDays"].includes(path)) renderEmployeeList();
-        if (path==="team") renderTeamCounters();
-        saveState(); renderEmployeePanel();
+        if (path==="team") { renderTeamCounters(); saveState(); renderEmployeePanel(); return; }
+        if (isTextField) { debounceSave(); } else { saveState(); renderEmployeePanel(); }
       }
       if (el.dataset.listItem) {
         const path=el.dataset.listItem;
+        const isTextField = el.type==="text"||el.type==="email"||el.tagName==="TEXTAREA";
         setByPath(employee,path,autoTyped(el.value,el.type));
-        saveState();
-        if (["tasks","projects","skills","onetoone","goals"].includes(state.activeTab)) renderEmployeePanel();
+        if (isTextField) { debounceSave(); } else { saveState(); renderEmployeePanel(); }
       }
     });
 
