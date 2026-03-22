@@ -2130,14 +2130,14 @@
           }
           if (val&&!state.teams.some(t=>t.name===val)) { state.teams.push({id:uid(),name:String(val),color:defaultTeamColor(state.teams.length)}); saveTeams(); }
         }
-        const isTextField = el.type==="text"||el.type==="email"||el.type==="number"||el.tagName==="TEXTAREA";
+        const isTextField = el.type==="text"||el.type==="email"||el.type==="number"||el.type==="date"||el.tagName==="TEXTAREA";
         if (["fullName","role","salaryReviewDate","load.currentPercent","load.currentDays"].includes(path)) { debounceSave(); renderEmployeeList(); return; }
         if (path==="team") { renderTeamCounters(); saveState(); renderEmployeePanel(); return; }
         if (isTextField) { debounceSave(); } else { saveState(); renderEmployeePanel(); }
       }
       if (el.dataset.listItem) {
         const path=el.dataset.listItem;
-        const isTextField = el.type==="text"||el.type==="email"||el.type==="number"||el.tagName==="TEXTAREA";
+        const isTextField = el.type==="text"||el.type==="email"||el.type==="number"||el.type==="date"||el.tagName==="TEXTAREA";
         setByPath(employee,path,autoTyped(el.value,el.type));
         if (isTextField) { debounceSave(); } else { saveState(); renderEmployeePanel(); }
       }
