@@ -124,7 +124,9 @@
 
     /* ─── CHIPS ─── */
     .team-counters { display: flex; gap: 5px; flex-wrap: wrap; padding: 7px 12px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,0.28); }
-    .chip { background: rgba(99,102,241,0.10); color: #4338ca; border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 600; border: 1px solid rgba(99,102,241,0.18); }
+    .chip { background: rgba(99,102,241,0.10); color: #4338ca; border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 600; border: 1px solid rgba(99,102,241,0.18); cursor: pointer; transition: all .15s; user-select: none; }
+    .chip:hover { background: rgba(99,102,241,0.20); border-color: rgba(99,102,241,0.4); transform: translateY(-1px); }
+    .chip.active { background: rgba(99,102,241,0.85); color: #fff; border-color: transparent; box-shadow: 0 2px 8px rgba(99,102,241,0.35); }
 
     /* ─── EMPLOYEE LIST ─── */
     .employee-list { overflow: auto; padding: 7px; }
@@ -495,8 +497,7 @@
     ];
     const gradeOptions = ["Junior", "Middle", "Senior", "Lead", "Principal"];
     const availabilityOptions = ["доступен", "частично", "недоступен"];
-    const GOAL_PERIOD_RANGE = { pastYears: 1, futureYears: 2 };
-    const QUARTER_RANGE = { pastYears: 1, futureYears: 2 };
+    const goalPeriodOptions = ["Q1 2025", "Q2 2025", "Q3 2025", "Q4 2025", "2025 год", "2026 год"];
 
     const state = {
       employees: [],
@@ -711,36 +712,10 @@
     }
 
 
-    function quarterLabel(date) {
-      const q = Math.floor(date.getMonth() / 3) + 1;
-      return 'Q' + q + ' ' + date.getFullYear();
-    }
     function currentQuarterLabel() {
-      return quarterLabel(new Date());
-    }
-    function buildQuarterOptions(range = QUARTER_RANGE) {
       const now = new Date();
-      const startYear = now.getFullYear() - range.pastYears;
-      const endYear = now.getFullYear() + range.futureYears;
-      const options = [];
-      for (let year = startYear; year <= endYear; year++) {
-        for (let quarter = 1; quarter <= 4; quarter++) {
-          options.push(`Q${quarter} ${year}`);
-        }
-      }
-      return options;
-    }
-    function buildGoalPeriodOptions(range = GOAL_PERIOD_RANGE) {
-      const now = new Date();
-      const startYear = now.getFullYear() - range.pastYears;
-      const endYear = now.getFullYear() + range.futureYears;
-      const options = [];
-      for (let year = startYear; year <= endYear; year++) {
-        for (let quarter = 1; quarter <= 4; quarter++) {
-          options.push(`Q${quarter} ${year}`);
-        }
-      }
-      return options;
+      const q = Math.floor(now.getMonth() / 3) + 1;
+      return 'Q' + q + ' ' + now.getFullYear();
     }
     function quarterMonths(label) {
       // Returns array of Date objects for first day of each month in the quarter
@@ -785,7 +760,7 @@
 
       const list = document.getElementById('bellList');
       if (!notifs.length) {
-        list.innerHTML = '<div class="bell-empty">Нет уведомлений</div>';
+        list.innerHTML = '<div class="notif-empty">Нет уведомлений</div>';
         return;
       }
 
@@ -798,13 +773,13 @@
 
       list.innerHTML = sorted.map(n => {
         const read = readNotifIds.has(n.id);
-        return `<div class="bell-item${read ? ' read' : ''}" data-notif-id="${n.id}" data-emp-id="${n.empId}" data-tab="${n.tab}">
-          <div class="bell-dot ${n.color}"></div>
-          <div class="bell-item-body">
-            <div class="bell-item-text">${escapeHtml(n.text)}</div>
-            <div class="bell-item-sub">${escapeHtml(n.employee)}</div>
+        return `<div class="notif-item${read ? ' read' : ''}" data-notif-id="${n.id}" data-emp-id="${n.empId}" data-tab="${n.tab}">
+          <div class="notif-dot ${n.color}"></div>
+          <div class="notif-body">
+            <div class="notif-text">${escapeHtml(n.text)}</div>
+            <div class="notif-meta">${escapeHtml(n.employee)}</div>
           </div>
-          <button class="bell-item-read" data-mark-read="${n.id}" type="button">${read ? '✓' : 'Прочитано'}</button>
+          <button class="notif-read-btn" data-mark-read="${n.id}">${read ? '✓' : 'Прочитано'}</button>
         </div>`;
       }).join('');
     }
@@ -839,7 +814,7 @@
     document.addEventListener('click', e => {
       const markBtn = e.target.closest('[data-mark-read]');
       if (markBtn) { e.stopPropagation(); markNotifRead(markBtn.getAttribute('data-mark-read')); return; }
-      const notifItem = e.target.closest('[data-notif-id][data-emp-id]');
+      const notifItem = e.target.closest('.notif-item[data-emp-id]');
       if (notifItem && !e.target.closest('[data-mark-read]')) {
         const empId = notifItem.getAttribute('data-emp-id');
         const tab = notifItem.getAttribute('data-tab');
@@ -937,7 +912,10 @@
       return now >= new Date(period.from) && now <= new Date(period.to);
     }
     function currentGoalPeriod() {
-      return currentQuarterLabel();
+      const now = new Date();
+      const y = now.getFullYear();
+      if (y <= 2025) return "Q" + (Math.floor(now.getMonth()/3)+1) + " 2025";
+      return y + " год";
     }
     function startOfWeek(date) {
       const d = new Date(date);
@@ -1060,10 +1038,6 @@
         state.employees.forEach(ensureOneOnOneShape);
         state.employees.forEach(ensureEmployeeTeamHistory);
         state.selectedId = parsed.selectedId || (state.employees[0] && state.employees[0].id);
-        if (Array.isArray(parsed.teams)) state.teams = parsed.teams;
-        if (parsed.personal) state.personal = parsed.personal;
-        if (Array.isArray(parsed.projects)) state.projects = parsed.projects;
-        if (parsed.targetSkills) state.targetSkills = parsed.targetSkills;
       } catch(e) {
         state.employees = [];
         state.selectedId = null;
@@ -1096,14 +1070,7 @@
 
     async function saveState() {
       // Save to localStorage as backup
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        employees: state.employees,
-        selectedId: state.selectedId,
-        teams: state.teams,
-        personal: state.personal,
-        projects: state.projects,
-        targetSkills: state.targetSkills
-      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ employees: state.employees, selectedId: state.selectedId }));
       showSaveIndicator();
       // Save to Supabase
       try {
@@ -1355,7 +1322,7 @@
     function renderTeamCounters() {
       const map = {};
       state.employees.forEach(e => { map[e.team] = (map[e.team]||0)+1; });
-      document.getElementById("teamCounters").innerHTML = Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0],"ru")).map(([team,count])=>`<span class="chip">${escapeHtml(team)}: ${count}</span>`).join("");
+      document.getElementById("teamCounters").innerHTML = Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0],"ru")).map(([team,count])=>`<span class="chip${state.filters.team===team?" active":""}" data-filter-team="${escapeHtml(team)}">${escapeHtml(team)}: ${count}</span>`).join("");
     }
     function renderEmployeeList() {
       const list = document.getElementById("employeeList");
@@ -1433,7 +1400,7 @@
         const capQ = Number(e.load.capacityQuarter) || 0;
         const usedDays = Number(e.load.currentDays) || 0;
         const autoPct = capQ > 0 ? Math.round((usedDays / capQ) * 100) : 0;
-        const qtrOpts = buildQuarterOptions();
+        const qtrOpts = ["Q1 2025","Q2 2025","Q3 2025","Q4 2025","Q1 2026","Q2 2026","Q3 2026","Q4 2026","Q1 2027","Q2 2027","Q3 2027","Q4 2027"];
         content = `
         <div class="grid-3" style="margin-bottom:10px;">
           <div class="field"><label>Квартал</label>
@@ -1536,7 +1503,7 @@
           archiveMap[g.period].push(g);
         });
         content = `<div class="section-title">Блок 1 — Текущие цели</div>
-        <div class="grid-2">${selectField("Период","goalsCurrentPeriod",currentPeriod,buildGoalPeriodOptions())}</div>
+        <div class="grid-2">${selectField("Период","goalsCurrentPeriod",currentPeriod,goalPeriodOptions)}</div>
         ${tableFromRows(["Цель","Приоритет","Срок","Прогресс (0-100%)","Статус","Комментарий",""],currentGoals.map(x=>{
           const progress=Math.max(0,Math.min(100,Number(x.g.progress)||0));
           return `<tr><td><input data-list-item="goals.${x.i}.title" value="${escapeHtml(x.g.title||"")}" /></td><td><select data-list-item="goals.${x.i}.priority"><option ${x.g.priority==="высокий"?"selected":""}>высокий</option><option ${x.g.priority==="средний"?"selected":""}>средний</option><option ${x.g.priority==="низкий"?"selected":""}>низкий</option></select></td><td><input type="date" data-list-item="goals.${x.i}.due" value="${x.g.due||""}" /></td><td><input type="number" min="0" max="100" data-list-item="goals.${x.i}.progress" value="${progress}" /><div class="loadbar compact"><span style="width:${progress}%; background:${progress>=80?"#059669":progress>=40?"#d97706":"#dc2626"};"></span></div></td><td><select data-list-item="goals.${x.i}.status"><option ${x.g.status==="в работе"?"selected":""}>в работе</option><option ${x.g.status==="выполнена"?"selected":""}>выполнена</option><option ${x.g.status==="отменена"?"selected":""}>отменена</option></select></td><td><input data-list-item="goals.${x.i}.comment" value="${escapeHtml(x.g.comment||"")}" /></td><td class="row-actions"><button data-del-row="goal.${x.i}">Удалить</button></td></tr>`;
@@ -2096,6 +2063,15 @@
       const pmem = e.target.closest('[data-proj-member-del]');
       if (pmem) { const [pi,mi]=pmem.getAttribute('data-proj-member-del').split('-').map(Number); state.projects[pi].members.splice(mi,1); saveState(); renderProjects(); return; }
 
+      const chip = e.target.closest('[data-filter-team]');
+      if (chip) {
+        const team = chip.getAttribute('data-filter-team');
+        state.filters.team = state.filters.team === team ? 'all' : team;
+        document.getElementById('teamFilter').value = state.filters.team;
+        renderTeamCounters();
+        renderEmployeeList();
+        return;
+      }
       const card=e.target.closest("[data-emp-card]");
       if (card) { state.selectedId=card.getAttribute("data-emp-card"); saveState(); renderAll(); return; }
       const tb=e.target.closest("[data-tab]");
