@@ -270,16 +270,25 @@
     .bell-dropdown.open { display: block; }
     .bell-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 700; background: rgba(255,255,255,0.55); border-radius: var(--radius) var(--radius) 0 0; position: sticky; top: 0; }
     .bell-mark-all { font-size: 11px; color: var(--primary); background: transparent; border: none; cursor: pointer; box-shadow: none; transform: none; backdrop-filter: none; padding: 2px 6px; }
-    .bell-item { display: flex; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .1s; }
-    .bell-item:hover { background: rgba(255,255,255,0.68); }
-    .bell-item.read { opacity: .42; }
-    .bell-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
-    .bell-dot.red { background: var(--danger); } .bell-dot.yellow { background: var(--warn); } .bell-dot.blue { background: var(--primary); }
-    .bell-item-body { flex: 1; }
-    .bell-item-text { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
-    .bell-item-sub { font-size: 11px; color: var(--muted); }
-    .bell-item-read { font-size: 11px; color: var(--muted); background: transparent; border: none; cursor: pointer; flex-shrink: 0; box-shadow: none; transform: none; backdrop-filter: none; padding: 2px 4px; }
-    .bell-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
+    .bell-item { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .12s; }
+    .bell-item:hover { background: rgba(255,255,255,0.75); }
+    .bell-item.read { opacity: .38; }
+    .bell-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .bell-icon.red { background: rgba(220,38,38,0.12); }
+    .bell-icon.yellow { background: rgba(217,119,6,0.12); }
+    .bell-icon.blue { background: rgba(37,99,235,0.10); }
+    .bell-item-body { flex: 1; min-width: 0; }
+    .bell-item-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+    .bell-item-name { font-size: 12px; font-weight: 700; color: var(--text); white-space: nowrap; }
+    .bell-item-text { font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .bell-item-tag { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+    .bell-item-tag.red { background: rgba(220,38,38,0.10); color: #991b1b; }
+    .bell-item-tag.yellow { background: rgba(217,119,6,0.10); color: #92400e; }
+    .bell-item-tag.blue { background: rgba(37,99,235,0.10); color: #1d4ed8; }
+    .bell-item-dismiss { font-size: 14px; color: var(--light); background: transparent; border: none; cursor: pointer; flex-shrink: 0; box-shadow: none; transform: none; backdrop-filter: none; padding: 2px 4px; line-height: 1; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+    .bell-item-dismiss:hover { background: rgba(0,0,0,0.07); color: var(--text); transform: none; box-shadow: none; }
+    .bell-empty { padding: 28px 16px; text-align: center; color: var(--muted); font-size: 13px; }
+    .bell-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--light); padding: 8px 14px 4px; }
 
     /* ─── LOADING / SAVE ─── */
     .loading-banner { position: fixed; bottom: 16px; right: 16px; background: rgba(26,35,50,0.82); backdrop-filter: blur(10px); color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 13px; font-weight: 500; z-index: 999; display: none; box-shadow: var(--shadow); border: 1px solid rgba(255,255,255,0.12); }
@@ -760,28 +769,44 @@
 
       const list = document.getElementById('bellList');
       if (!notifs.length) {
-        list.innerHTML = '<div class="notif-empty">Нет уведомлений</div>';
+        list.innerHTML = '<div class="bell-empty">✓ Всё в порядке — нет уведомлений</div>';
         return;
       }
 
-      const sorted = [...notifs].sort((a, b) => {
-        const order = { red: 0, yellow: 1, blue: 2 };
-        const readDiff = (readNotifIds.has(a.id) ? 1 : 0) - (readNotifIds.has(b.id) ? 1 : 0);
-        if (readDiff !== 0) return readDiff;
-        return (order[a.color] || 0) - (order[b.color] || 0);
-      });
+      const icons = { red: '⚠️', yellow: '🕐', blue: 'ℹ️' };
+      const labels = { red: 'Срочно', yellow: 'Внимание', blue: 'Инфо' };
 
-      list.innerHTML = sorted.map(n => {
-        const read = readNotifIds.has(n.id);
-        return `<div class="notif-item${read ? ' read' : ''}" data-notif-id="${n.id}" data-emp-id="${n.empId}" data-tab="${n.tab}">
-          <div class="notif-dot ${n.color}"></div>
-          <div class="notif-body">
-            <div class="notif-text">${escapeHtml(n.text)}</div>
-            <div class="notif-meta">${escapeHtml(n.employee)}</div>
+      const unreadList = notifs.filter(n => !readNotifIds.has(n.id));
+      const readList   = notifs.filter(n =>  readNotifIds.has(n.id));
+
+      const renderItem = n => `
+        <div class="bell-item" data-notif-id="${n.id}" data-emp-id="${n.empId}" data-tab="${n.tab}">
+          <div class="bell-icon ${n.color}">${icons[n.color]||'•'}</div>
+          <div class="bell-item-body">
+            <div class="bell-item-row">
+              <span class="bell-item-name">${escapeHtml(n.employee)}</span>
+              <span class="bell-item-tag ${n.color}">${labels[n.color]||''}</span>
+            </div>
+            <div class="bell-item-text">${escapeHtml(n.text)}</div>
           </div>
-          <button class="notif-read-btn" data-mark-read="${n.id}">${read ? '✓' : 'Прочитано'}</button>
+          <button class="bell-item-dismiss" data-mark-read="${n.id}" title="Отметить прочитанным">×</button>
         </div>`;
-      }).join('');
+
+      let html = '';
+      if (unreadList.length) html += unreadList.map(renderItem).join('');
+      if (readList.length) {
+        html += `<div class="bell-section-label">Прочитанные</div>`;
+        html += readList.map(n => `<div class="bell-item read" data-notif-id="${n.id}" data-emp-id="${n.empId}" data-tab="${n.tab}">
+          <div class="bell-icon ${n.color}" style="opacity:.5;">${icons[n.color]||'•'}</div>
+          <div class="bell-item-body">
+            <div class="bell-item-row">
+              <span class="bell-item-name">${escapeHtml(n.employee)}</span>
+            </div>
+            <div class="bell-item-text">${escapeHtml(n.text)}</div>
+          </div>
+        </div>`).join('');
+      }
+      list.innerHTML = html;
     }
 
     function markNotifRead(id) {
