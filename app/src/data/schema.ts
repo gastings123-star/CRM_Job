@@ -1,46 +1,252 @@
+/**
+ * Staff CRM — доменные типы и Zod-схемы.
+ *
+ * Источник истины: legacy `staff-crm/index.html` (localStorage `staff_crm_v1`).
+ * Для новых полей и редко используемых вложенных структур применяется
+ * `.passthrough()` — это позволяет принимать legacy-данные без потерь
+ * и не требует править схему при каждом мелком изменении формы.
+ *
+ * Типы, на которых стоит «строгий» Zod, — это те, что напрямую читают
+ * доменные функции (risk, capacity, agenda, notifications, metrics).
+ */
 import { z } from 'zod';
 
-// Соответствует legacy backlog_tracker_v2 (см. legacy index.html):
-// tasks/teams + nextId/nextTeamId.
+// ---------------------------------------------------------------
+// Базовые блоки
+// ---------------------------------------------------------------
 
-export const TeamSchema = z.object({
-  id: z.string().uuid(),
-  legacyId: z.number().int().optional(), // числовой id из legacy
-  name: z.string().min(1),
-  color: z.string().default('#534AB7'),
-  ana: z.number().min(0).max(100).default(100),
-  dev: z.number().min(0).max(100).default(100),
-  tst: z.number().min(0).max(100).default(100),
+/** ISO-дата `YYYY-MM-DD` или пустая строка. */
+export const IsoDate = z.string().refine((v) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v), {
+  message: 'expected YYYY-MM-DD or empty string',
 });
+export type IsoDate = z.infer<typeof IsoDate>;
+
+/** Период `[from..to]`, обе границы — ISO-даты. */
+export const PeriodSchema = z.object({
+  from: IsoDate.default(''),
+  to: IsoDate.default(''),
+});
+export type Period = z.infer<typeof PeriodSchema>;
+
+// ---------------------------------------------------------------
+// Нагрузка
+// ---------------------------------------------------------------
+
+export const LoadSchema = z
+  .object({
+    currentDays: z.number().default(0),
+    currentPercent: z.number().default(0),
+    capacityQuarter: z.number().default(0),
+    /** Метка квартала, например `Q1 2026`. */
+    capacityQtr: z.string().default(''),
+    status: z.string().default('доступен'),
+    nextMonthPlan: z.number().default(0),
+    vacations: z.array(PeriodSchema).default([]),
+    sickLeaves: z.array(PeriodSchema).default([]),
+    projects: z.array(z.string()).default([]),
+  })
+  .passthrough();
+export type Load = z.infer<typeof LoadSchema>;
+
+// ---------------------------------------------------------------
+// Задачи / ИПР / навыки / цели
+// ---------------------------------------------------------------
+
+export const TaskItemSchema = z
+  .object({
+    text: z.string().default(''),
+    /** `'выполнена' | 'в работе' | 'не начата'`. */
+    status: z.string().default(''),
+    /** ISO-дата дедлайна. */
+    due: z.string().default(''),
+  })
+  .passthrough();
+export type TaskItem = z.infer<typeof TaskItemSchema>;
+
+export const DevelopmentItemSchema = z
+  .object({
+    zone: z.string().default(''),
+    /** `'выполнено' | 'в работе' | 'не начато'`. */
+    status: z.string().default(''),
+    deadline: z.string().default(''),
+  })
+  .passthrough();
+export type DevelopmentItem = z.infer<typeof DevelopmentItemSchema>;
+
+export const SkillSchema = z
+  .object({
+    name: z.string().default(''),
+    /** Уровень навыка `0..5`. */
+    level: z.number().min(0).max(5).default(0),
+  })
+  .passthrough();
+export type Skill = z.infer<typeof SkillSchema>;
+
+export const GoalSchema = z
+  .object({
+    text: z.string().default(''),
+    /** `'в работе' | 'выполнена' | ...`. */
+    status: z.string().default(''),
+    /** Прогресс `0..100`. */
+    progress: z.number().min(0).max(100).default(0),
+  })
+  .passthrough();
+export type Goal = z.infer<typeof GoalSchema>;
+
+// ---------------------------------------------------------------
+// Риск / оценка руководителя / 1-on-1
+// ---------------------------------------------------------------
+
+export const RiskLevel = z.enum(['низкий', 'средний', 'высокий']);
+export type RiskLevel = z.infer<typeof RiskLevel>;
+
+export const RiskSchema = z.object({
+  level: RiskLevel.default('низкий'),
+  comment: z.string().default(''),
+});
+export type Risk = z.infer<typeof RiskSchema>;
+
+export const ManagerRatingSchema = z.object({
+  score: z.number().min(1).max(5).default(3),
+  comment: z.string().default(''),
+});
+export type ManagerRating = z.infer<typeof ManagerRatingSchema>;
+
+export const OneOnOneHistoryItemSchema = z
+  .object({
+    date: z.string().default(''),
+  })
+  .passthrough();
+export type OneOnOneHistoryItem = z.infer<typeof OneOnOneHistoryItemSchema>;
+
+export const AgendaChecklistSchema = z.object({
+  feedback: z.boolean().default(false),
+  goals: z.boolean().default(false),
+  load: z.boolean().default(false),
+  growth: z.boolean().default(false),
+  wellbeing: z.boolean().default(false),
+});
+export type AgendaChecklist = z.infer<typeof AgendaChecklistSchema>;
+
+export const OneOnOneSchema = z
+  .object({
+    nextDate: z.string().default(''),
+    prepNotes: z.string().default(''),
+    /** История встреч, новейшая — первой. */
+    history: z.array(OneOnOneHistoryItemSchema).default([]),
+    agendaChecklist: AgendaChecklistSchema.default({
+      feedback: false,
+      goals: false,
+      load: false,
+      growth: false,
+      wellbeing: false,
+    }),
+    agendaExtra: z.string().default(''),
+  })
+  .passthrough();
+export type OneOnOne = z.infer<typeof OneOnOneSchema>;
+
+// ---------------------------------------------------------------
+// Сотрудник
+// ---------------------------------------------------------------
+
+export const PromotionReadiness = z.enum([
+  'не готов',
+  'готов через 6 мес',
+  'готов через год',
+  'готов сейчас',
+]);
+export type PromotionReadiness = z.infer<typeof PromotionReadiness>;
+
+export const EmployeeSchema = z
+  .object({
+    id: z.string(),
+    fullName: z.string().default(''),
+    role: z.string().default(''),
+    /** Имя команды (legacy-формат, до перехода на team_id uuid). */
+    team: z.string().default(''),
+    hireDate: z.string().default(''),
+    salaryReviewDate: z.string().default(''),
+    salary: z.number().default(0),
+    employeeNumber: z.string().default(''),
+    positionId: z.string().default(''),
+    location: z.string().default(''),
+    email: z.string().default(''),
+    teams: z.string().default(''),
+    telegram: z.string().default(''),
+    grade: z.string().default('Junior'),
+    birthday: z.string().default(''),
+    load: LoadSchema,
+    skills: z.array(SkillSchema).default([]),
+    development: z.array(DevelopmentItemSchema).default([]),
+    managerRating: ManagerRatingSchema.default({ score: 3, comment: '' }),
+    projectHistory: z.array(z.unknown()).default([]),
+    salaryHistory: z.array(z.unknown()).default([]),
+    hobbies: z.string().default(''),
+    managerComments: z.array(z.unknown()).default([]),
+    documents: z.array(z.unknown()).default([]),
+    risk: RiskSchema.default({ level: 'низкий', comment: '' }),
+    promotionReadiness: PromotionReadiness.default('не готов'),
+    workPreference: z.string().default('гибрид'),
+    tasks: z.array(TaskItemSchema).default([]),
+    oneOnOne: OneOnOneSchema.default({
+      nextDate: '',
+      prepNotes: '',
+      history: [],
+      agendaChecklist: {
+        feedback: false,
+        goals: false,
+        load: false,
+        growth: false,
+        wellbeing: false,
+      },
+      agendaExtra: '',
+    }),
+    goalsCurrentPeriod: z.string().default(''),
+    goals: z.array(GoalSchema).default([]),
+    goalsSummary: z
+      .object({
+        score: z.number().default(3),
+        comment: z.string().default(''),
+        date: z.string().default(''),
+      })
+      .default({ score: 3, comment: '', date: '' }),
+    teamHistory: z.array(z.unknown()).default([]),
+  })
+  .passthrough();
+export type Employee = z.infer<typeof EmployeeSchema>;
+
+// ---------------------------------------------------------------
+// Команда / проект / личное
+// ---------------------------------------------------------------
+
+export const TeamSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().min(1),
+    color: z.string().default('#534AB7'),
+  })
+  .passthrough();
 export type Team = z.infer<typeof TeamSchema>;
 
-export const TaskStatus = z.enum(['pending', 'approved', 'rejected']);
-export type TaskStatus = z.infer<typeof TaskStatus>;
+export const ProjectSchema = z
+  .object({
+    id: z.string(),
+    name: z.string().min(1),
+    status: z.string().default(''),
+  })
+  .passthrough();
+export type Project = z.infer<typeof ProjectSchema>;
 
-export const TaskPriority = z.enum(['high', 'medium', 'low', '']);
-export type TaskPriority = z.infer<typeof TaskPriority>;
+/**
+ * Personal — произвольный JSON, по одному документу на пользователя.
+ * Содержимое определяется UI и эволюционирует независимо от схемы БД.
+ */
+export const PersonalSchema = z.object({}).passthrough();
+export type Personal = z.infer<typeof PersonalSchema>;
 
-export const TaskSchema = z.object({
-  id: z.string().uuid(),
-  legacyId: z.number().int().optional(),
-  name: z.string().min(1),
-  shortDescription: z.string().default(''),
-  teamId: z.string().uuid().nullable().default(null),
-  ana: z.number().min(0).default(0), // дни
-  dev: z.number().min(0).default(0),
-  tst: z.number().min(0).default(0),
-  status: TaskStatus.default('pending'),
-  priority: TaskPriority.default(''),
-  rank: z.number().int().default(0),
-  value: z.string().default(''),
-  effect: z.string().default(''),
-  systems: z.string().default(''),
-  stakeholder: z.string().default(''),
-  quarter: z.string().default(''),
-  comment: z.string().default(''),
-  jira: z.string().default(''),
-  sd: z.string().default(''),
-});
-export type Task = z.infer<typeof TaskSchema>;
+// ---------------------------------------------------------------
+// Версия схемы (для миграций localStorage / JSON-бэкапов)
+// ---------------------------------------------------------------
 
-export const SCHEMA_VERSION = 1 as const;
+export const SCHEMA_VERSION = 2 as const;
