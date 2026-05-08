@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+*.tsbuildinfo
+playwright-report
+test-results
+.env
+.env.local
+*.log
+.DS_Store
+src/infra/supabase.types.ts
