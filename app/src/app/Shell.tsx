@@ -40,7 +40,8 @@ export function Shell() {
           <h1 className="mb-4 text-2xl font-semibold">Backlog Tracker</h1>
           {linkSent ? (
             <p className="text-slate-300">
-              Ссылка отправлена на <strong>{email}</strong>. Проверь почту и открой ссылку, чтобы войти.
+              Ссылка отправлена на <strong>{email}</strong>. Проверь почту и открой ссылку, чтобы
+              войти.
             </p>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
