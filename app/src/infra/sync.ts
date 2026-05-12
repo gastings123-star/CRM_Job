@@ -198,6 +198,11 @@ export class SyncQueue {
     return this.status;
   }
 
+  /** Снимок текущих операций (read-only). Используется репозиториями при merge. */
+  getOps(): readonly SyncOp[] {
+    return this.readQueue();
+  }
+
   enqueue(input: EnqueueInput): void {
     const queue = this.readQueue();
     const newOp: SyncOp = {

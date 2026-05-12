@@ -111,17 +111,32 @@ export function createCollectionRepo<T, In = T>(
   }
 
   async function loadAll(): Promise<void> {
+    // Сначала пытаемся слить оптимистичные мутации на сервер — иначе SELECT
+    // вернёт устаревший срез и затрёт локальные insert/update, которые ещё
+    // в очереди (классическая гонка после bulk-импорта).
+    await queue.flush();
+
     const { data, error } = await supabase.from(cfg.entity).select('id, payload');
     if (error) throw new Error(error.message);
     if (!Array.isArray(data)) return;
-    // Сервер хранит элемент в jsonb-колонке `payload`; в кэше — плоский T.
-    const items: T[] = [];
+
+    // Записи, по которым ещё есть несинхронизированные операции — приоритет за
+    // локальной копией: серверный снимок по ним считаем устаревшим.
+    const pendingIds = new Set(
+      queue.getOps().filter((o) => o.table === cfg.entity).map((o) => o.id),
+    );
+
+    const serverItems: T[] = [];
     for (const row of data) {
       const r = row as { id?: unknown; payload?: unknown };
       const parsed = cfg.schema.safeParse(r.payload);
-      if (parsed.success) items.push(parsed.data);
+      if (!parsed.success) continue;
+      const id = cfg.getId(parsed.data);
+      if (pendingIds.has(id)) continue;
+      serverItems.push(parsed.data);
     }
-    persist(items);
+    const localPending = sig.value.filter((x) => pendingIds.has(cfg.getId(x)));
+    persist([...serverItems, ...localPending]);
   }
 
   function create(item: T): void {
