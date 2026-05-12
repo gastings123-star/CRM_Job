@@ -4,9 +4,9 @@ import { useId } from 'preact/hooks';
 export interface FieldProps {
   label: string;
   /** Текст подсказки под полем. */
-  hint?: string;
+  hint?: string | undefined;
   /** Текст ошибки (если есть — заменяет hint и красит обводку). */
-  error?: string;
+  error?: string | undefined;
   required?: boolean;
   children: (props: { id: string; 'aria-invalid'?: boolean }) => ComponentChildren;
 }

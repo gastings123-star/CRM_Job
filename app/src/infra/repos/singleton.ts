@@ -6,7 +6,7 @@
  *  - в очередь идёт `upsert` (insert-or-update) на каждую мутацию;
  *  - локальный кэш — один документ (`null` если не загружали).
  */
-import type { ZodType } from 'zod';
+import type { ZodType, ZodTypeDef } from 'zod';
 import { signal, type Signal } from '@preact/signals';
 import { createStore } from '@/infra/storage';
 import { supabase as defaultSupabase } from '@/infra/supabase';
@@ -24,10 +24,10 @@ export interface SingletonSupabaseLike {
   };
 }
 
-export interface SingletonRepoConfig<T> {
+export interface SingletonRepoConfig<T, In = T> {
   /** Имя сущности и одновременно SyncTable. */
   entity: SyncTable;
-  schema: ZodType<T>;
+  schema: ZodType<T, ZodTypeDef, In>;
 }
 
 export interface SingletonRepoDeps {
@@ -64,8 +64,8 @@ function resolveStorage(provided?: Storage): Storage {
   };
 }
 
-export function createSingletonRepo<T>(
-  cfg: SingletonRepoConfig<T>,
+export function createSingletonRepo<T, In = T>(
+  cfg: SingletonRepoConfig<T, In>,
   deps: SingletonRepoDeps = {},
 ): SingletonRepo<T> {
   const supabase = deps.supabase ?? (defaultSupabase as unknown as SingletonSupabaseLike);

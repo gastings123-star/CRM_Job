@@ -11,7 +11,7 @@
  * Реализация целенаправленно держится тонкой: storage хранит «срез истины»
  * между сессиями, основной источник — Supabase. См. `sync.ts`.
  */
-import type { ZodType } from 'zod';
+import type { ZodType, ZodTypeDef } from 'zod';
 import { SCHEMA_VERSION } from '@/data/schema';
 
 const NS = 'crm';
@@ -42,11 +42,11 @@ function backupCorrupt(storage: Storage, k: string, raw: string): void {
   safeSet(storage, `${NS}:corrupt:${k}:${ts}`, raw);
 }
 
-export interface StorageEntry<T> {
+export interface StorageEntry<T, In = T> {
   /** Логическое имя сущности — без префикса/версии. */
   entity: string;
   /** Zod-схема для валидации. */
-  schema: ZodType<T>;
+  schema: ZodType<T, ZodTypeDef, In>;
   /** Опциональный мигратор предыдущих версий, по убыванию `fromVersion`. */
   migrations?: {
     fromVersion: number;
@@ -55,7 +55,10 @@ export interface StorageEntry<T> {
   }[];
 }
 
-export function createStore<T>(entry: StorageEntry<T>, storage: Storage = localStorage) {
+export function createStore<T, In = T>(
+  entry: StorageEntry<T, In>,
+  storage: Storage = localStorage,
+) {
   const currentKey = key(entry.entity);
 
   function migrate(): unknown {
