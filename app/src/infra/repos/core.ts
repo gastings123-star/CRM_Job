@@ -14,7 +14,7 @@
  *  - нет partial-update jsonb на стороне сервера — отправляем полный payload;
  *  - для DI/тестов `deps` принимает мок supabase и SyncQueue.
  */
-import { z, type ZodType } from 'zod';
+import { z, type ZodType, type ZodTypeDef } from 'zod';
 import { signal, type Signal } from '@preact/signals';
 import { createStore } from '@/infra/storage';
 import { supabase as defaultSupabase } from '@/infra/supabase';
@@ -27,11 +27,17 @@ export interface SupabaseLike {
   };
 }
 
-export interface CollectionRepoConfig<T> {
+/**
+ * Параметр In ≠ T нужен потому, что у Zod-схем с `.default()` и
+ * `.passthrough()` входной и выходной типы различаются: репо хранит
+ * и отдаёт UI выходной T (поля гарантированно заполнены), а парсер
+ * принимает In (поля опциональны).
+ */
+export interface CollectionRepoConfig<T, In = T> {
   /** Имя сущности (логическое, без префиксов). Используется и как имя таблицы. */
   entity: SyncTable;
   /** Zod-схема одного элемента. Должна включать поле `id: string`. */
-  schema: ZodType<T>;
+  schema: ZodType<T, ZodTypeDef, In>;
   /** Извлекатель id (схема может варьироваться). */
   getId: (item: T) => string;
 }
@@ -86,8 +92,8 @@ function resolveStorage(provided?: Storage): Storage {
   return memoryFallback();
 }
 
-export function createCollectionRepo<T>(
-  cfg: CollectionRepoConfig<T>,
+export function createCollectionRepo<T, In = T>(
+  cfg: CollectionRepoConfig<T, In>,
   deps: CollectionRepoDeps = {},
 ): CollectionRepo<T> {
   const supabase = deps.supabase ?? (defaultSupabase as unknown as SupabaseLike);

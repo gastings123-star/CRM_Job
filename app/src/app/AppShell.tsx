@@ -6,6 +6,7 @@ import { syncQueue, type SyncStatus } from '@/infra/sync';
 import { useEffect, useState } from 'preact/hooks';
 import { navItems, routes, type RouteKey } from './routes';
 import { Placeholder } from '@/ui/screens/Placeholder';
+import { CrmScreen } from '@/ui/screens/crm/CrmScreen';
 import { ToastHost } from '@/ui/components/ToastHost';
 import { ConfirmDialogHost } from '@/ui/components/ConfirmDialogHost';
 
@@ -129,9 +130,6 @@ function SyncBadge({ status }: { status: SyncStatus }): JSX.Element {
 
 function DashboardScreen(): JSX.Element {
   return <Placeholder title="Дашборд" />;
-}
-function CrmScreen(): JSX.Element {
-  return <Placeholder title="CRM" />;
 }
 function CalendarScreen(): JSX.Element {
   return <Placeholder title="Календарь" />;
