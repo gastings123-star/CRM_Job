@@ -1,206 +1,291 @@
 /**
- * Миграция Staff CRM из legacy localStorage / JSON-бэкапа в Supabase.
+ * Импорт данных из legacy Staff CRM в новое хранилище (Supabase + локальный кэш).
  *
- * Источник:
- *   - localStorage `staff_crm_v1`        — `{ employees: [...], selectedId }`
- *   - localStorage `staff_crm_teams_v1`  — `Team[]`
+ * Источники:
+ *   - localStorage `staff_crm_v1`       — `{ employees: [...], selectedId? }`;
+ *   - localStorage `staff_crm_teams_v1` — `Team[]`;
+ *   - JSON-бэкап того же формата (поддерживается импорт из строки).
  *
- * Цель:
- *   - public.teams      — owner_id, legacy_id, name, color
- *   - public.employees  — owner_id, legacy_id, full_name, role, team_id, payload (jsonb)
+ * Целевая схема:
+ *   - Supabase-таблицы `employees`/`teams`/`projects` с jsonb-колонкой `payload`.
+ *   - Запись идёт через `employeesRepo.create()` / `teamsRepo.create()`,
+ *     то есть оптимистично в signal + кэш + очередь sync на сервер.
  *
- * Защиты:
- *   - dryRun по умолчанию — ничего не пишет, возвращает план;
- *   - идемпотентность через unique(owner_id, legacy_id);
- *   - бэкап legacy-стейта в localStorage `legacy_backup_<ts>` перед записью.
+ * Идемпотентность:
+ *   - в payload каждой импортируемой записи добавляется поле `legacyId`
+ *     (исходный id из legacy-стейта); при повторном запуске мы пропускаем
+ *     записи, чьи `legacyId` уже встречаются в `repo.getAll()`.
+ *
+ * Безопасность:
+ *   - `dryRun: true` по умолчанию — только считает план, ничего не пишет;
+ *   - перед записью legacy-блобы бэкапятся в `legacy_backup_<key>_<ts>`;
+ *   - ошибки парсинга отдельных записей не валят всю миграцию,
+ *     уходят в `report.errors` и пропускают «битые» элементы.
  */
-import { supabase } from './supabase';
 import { EmployeeSchema, TeamSchema, type Employee, type Team } from '@/data/schema';
+import { employeesRepo as defaultEmployeesRepo } from './repos/employees';
+import { teamsRepo as defaultTeamsRepo } from './repos/teams';
+import type { CollectionRepo } from './repos/core';
 
-const EMPLOYEES_KEY = 'staff_crm_v1';
-const TEAMS_KEY = 'staff_crm_teams_v1';
+export const LEGACY_EMPLOYEES_KEY = 'staff_crm_v1';
+export const LEGACY_TEAMS_KEY = 'staff_crm_teams_v1';
+
+/** Сырой материал для миграции — может прийти как из localStorage, так и из JSON. */
+export interface LegacySource {
+  employeesBlob: unknown;
+  teamsBlob: unknown;
+}
+
+export interface SectionStats {
+  /** Сколько записей нашли в источнике. */
+  found: number;
+  /** Сколько пройдут валидацию и будут импортированы. */
+  toImport: number;
+  /** Сколько пропустили (уже импортированы по legacyId). */
+  skippedExisting: number;
+  /** Сколько пропустили из-за ошибок валидации. */
+  skippedInvalid: number;
+  /** Конкретные тексты ошибок Zod (для диагностики). */
+  errors: string[];
+}
 
 export interface MigrationReport {
   dryRun: boolean;
-  source: { employees: string | null; teams: string | null };
-  teamsToInsert: number;
-  employeesToInsert: number;
-  skippedTeams: number;
-  skippedEmployees: number;
-  errors: string[];
+  teams: SectionStats;
+  employees: SectionStats;
 }
 
-interface LegacyEmployeesBlob {
-  employees?: unknown[];
-  selectedId?: string | null;
-}
-
-function readLegacy(): {
-  employees: Employee[];
+export interface MigrationPlan {
   teams: Team[];
-  rawEmployees: string | null;
-  rawTeams: string | null;
-  errors: string[];
-} {
-  const errors: string[] = [];
-  const rawEmployees = localStorage.getItem(EMPLOYEES_KEY);
-  const rawTeams = localStorage.getItem(TEAMS_KEY);
-
-  const employees: Employee[] = [];
-  const teams: Team[] = [];
-
-  if (rawEmployees) {
-    try {
-      const blob = JSON.parse(rawEmployees) as LegacyEmployeesBlob;
-      const list = Array.isArray(blob.employees) ? blob.employees : [];
-      for (const item of list) {
-        const parsed = EmployeeSchema.safeParse(item);
-        if (parsed.success) {
-          employees.push(parsed.data);
-        } else {
-          errors.push(`employee parse: ${parsed.error.message}`);
-        }
-      }
-    } catch (e) {
-      errors.push(`Не удалось распарсить ${EMPLOYEES_KEY}: ${(e as Error).message}`);
-    }
-  }
-
-  if (rawTeams) {
-    try {
-      const list = JSON.parse(rawTeams) as unknown[];
-      if (Array.isArray(list)) {
-        for (const item of list) {
-          const parsed = TeamSchema.safeParse(item);
-          if (parsed.success) {
-            teams.push(parsed.data);
-          } else {
-            errors.push(`team parse: ${parsed.error.message}`);
-          }
-        }
-      }
-    } catch (e) {
-      errors.push(`Не удалось распарсить ${TEAMS_KEY}: ${(e as Error).message}`);
-    }
-  }
-
-  return { employees, teams, rawEmployees, rawTeams, errors };
+  employees: Employee[];
+  report: MigrationReport;
 }
 
-export async function migrateLegacyToSupabase(
-  opts: { dryRun?: boolean } = {},
-): Promise<MigrationReport> {
-  const dryRun = opts.dryRun ?? true;
-  const report: MigrationReport = {
-    dryRun,
-    source: { employees: null, teams: null },
-    teamsToInsert: 0,
-    employeesToInsert: 0,
-    skippedTeams: 0,
-    skippedEmployees: 0,
+// ---------------------------------------------------------------
+// Чтение источников
+// ---------------------------------------------------------------
+
+function tryParse(raw: string | null): unknown {
+  if (raw == null) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/** Достаёт сырые блобы из браузерного localStorage. */
+export function readLegacyFromStorage(storage: Storage = localStorage): LegacySource {
+  return {
+    employeesBlob: tryParse(storage.getItem(LEGACY_EMPLOYEES_KEY)),
+    teamsBlob: tryParse(storage.getItem(LEGACY_TEAMS_KEY)),
+  };
+}
+
+/**
+ * Принимает распарсенный JSON-бэкап произвольной формы и пытается достать из
+ * него legacy employees и teams. Принимаются варианты:
+ *  - `{ employees: [...], teams: [...] }`        — общий формат экспорта;
+ *  - `{ employees: [...] }` без команд;
+ *  - просто массив сотрудников `[ {...}, ... ]`.
+ */
+export function readLegacyFromJson(parsed: unknown): LegacySource {
+  if (Array.isArray(parsed)) {
+    return { employeesBlob: { employees: parsed }, teamsBlob: null };
+  }
+  if (parsed && typeof parsed === 'object') {
+    const obj = parsed as Record<string, unknown>;
+    const teamsBlob = Array.isArray(obj.teams) ? obj.teams : null;
+    // `staff_crm_v1`-формат: { employees: [...] }; либо прямо { employees: [...] }
+    const employeesBlob =
+      'employees' in obj && Array.isArray(obj.employees)
+        ? { employees: obj.employees }
+        : null;
+    return { employeesBlob, teamsBlob };
+  }
+  return { employeesBlob: null, teamsBlob: null };
+}
+
+// ---------------------------------------------------------------
+// Планирование
+// ---------------------------------------------------------------
+
+/** Достаём legacyId из item, если уже импортировали — пропускаем. */
+function legacyIdOf(item: { legacyId?: unknown }): string | null {
+  return typeof item.legacyId === 'string' && item.legacyId.length > 0 ? item.legacyId : null;
+}
+
+function extractLegacyArray(blob: unknown, key: 'employees' | null): unknown[] {
+  if (key === null) {
+    return Array.isArray(blob) ? blob : [];
+  }
+  if (blob && typeof blob === 'object' && Array.isArray((blob as Record<string, unknown>)[key])) {
+    return (blob as Record<string, unknown>)[key] as unknown[];
+  }
+  return [];
+}
+
+/**
+ * Строит план миграции: какие legacy-записи поедут в импорт,
+ * какие пропустим (дубль / битые). Ничего не пишет.
+ */
+export function planMigration(
+  source: LegacySource,
+  existing: { teams: Team[]; employees: Employee[] },
+): MigrationPlan {
+  const teamsStats: SectionStats = {
+    found: 0,
+    toImport: 0,
+    skippedExisting: 0,
+    skippedInvalid: 0,
+    errors: [],
+  };
+  const employeesStats: SectionStats = {
+    found: 0,
+    toImport: 0,
+    skippedExisting: 0,
+    skippedInvalid: 0,
     errors: [],
   };
 
-  const legacy = readLegacy();
-  report.errors.push(...legacy.errors);
-  report.source.employees = legacy.rawEmployees ? EMPLOYEES_KEY : null;
-  report.source.teams = legacy.rawTeams ? TEAMS_KEY : null;
+  const existingTeamLegacyIds = new Set<string>(
+    existing.teams.map((t) => legacyIdOf(t as unknown as { legacyId?: unknown })).filter((x): x is string => !!x),
+  );
+  const existingEmployeeLegacyIds = new Set<string>(
+    existing.employees
+      .map((e) => legacyIdOf(e as unknown as { legacyId?: unknown }))
+      .filter((x): x is string => !!x),
+  );
 
-  if (legacy.employees.length === 0 && legacy.teams.length === 0) {
-    return report;
-  }
-
-  const { data: userData, error: userErr } = await supabase.auth.getUser();
-  if (userErr || !userData.user) {
-    report.errors.push('Не залогинен');
-    return report;
-  }
-  const ownerId = userData.user.id;
-
-  // Бэкап legacy перед записью
-  if (!dryRun) {
-    const ts = Date.now();
-    if (legacy.rawEmployees) {
-      localStorage.setItem(`legacy_backup_${EMPLOYEES_KEY}_${ts}`, legacy.rawEmployees);
+  // --- Команды ---
+  const rawTeams = extractLegacyArray(source.teamsBlob, null);
+  teamsStats.found = rawTeams.length;
+  const teamsToImport: Team[] = [];
+  for (const raw of rawTeams) {
+    const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const legacyId = typeof obj.id === 'string' ? obj.id : null;
+    if (legacyId && existingTeamLegacyIds.has(legacyId)) {
+      teamsStats.skippedExisting += 1;
+      continue;
     }
-    if (legacy.rawTeams) {
-      localStorage.setItem(`legacy_backup_${TEAMS_KEY}_${ts}`, legacy.rawTeams);
+    // Перегенерируем uuid, прокидываем legacyId внутрь payload.
+    const candidate = {
+      ...obj,
+      id: crypto.randomUUID(),
+      legacyId: legacyId ?? undefined,
+    };
+    const parsed = TeamSchema.safeParse(candidate);
+    if (!parsed.success) {
+      teamsStats.skippedInvalid += 1;
+      teamsStats.errors.push(parsed.error.issues.map((i) => i.message).join('; '));
+      continue;
+    }
+    teamsToImport.push(parsed.data);
+  }
+  teamsStats.toImport = teamsToImport.length;
+
+  // --- Сотрудники ---
+  const rawEmployees = extractLegacyArray(source.employeesBlob, 'employees');
+  employeesStats.found = rawEmployees.length;
+  const employeesToImport: Employee[] = [];
+  for (const raw of rawEmployees) {
+    const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const legacyId = typeof obj.id === 'string' ? obj.id : null;
+    if (legacyId && existingEmployeeLegacyIds.has(legacyId)) {
+      employeesStats.skippedExisting += 1;
+      continue;
+    }
+    const candidate = {
+      ...obj,
+      id: crypto.randomUUID(),
+      legacyId: legacyId ?? undefined,
+      // EmployeeSchema требует `load` (без default на корне) — гарантируем хоть пустой.
+      load: obj.load && typeof obj.load === 'object' ? obj.load : {},
+    };
+    const parsed = EmployeeSchema.safeParse(candidate);
+    if (!parsed.success) {
+      employeesStats.skippedInvalid += 1;
+      employeesStats.errors.push(parsed.error.issues.map((i) => i.message).join('; '));
+      continue;
+    }
+    employeesToImport.push(parsed.data);
+  }
+  employeesStats.toImport = employeesToImport.length;
+
+  return {
+    teams: teamsToImport,
+    employees: employeesToImport,
+    report: {
+      dryRun: true,
+      teams: teamsStats,
+      employees: employeesStats,
+    },
+  };
+}
+
+// ---------------------------------------------------------------
+// Применение плана
+// ---------------------------------------------------------------
+
+export interface MigrationDeps {
+  employees?: CollectionRepo<Employee>;
+  teams?: CollectionRepo<Team>;
+  /** Хранилище для бэкапа legacy-блобов перед записью. */
+  storage?: Storage;
+}
+
+function backupLegacy(storage: Storage, source: LegacySource): void {
+  const ts = Date.now();
+  if (source.employeesBlob != null) {
+    try {
+      storage.setItem(`legacy_backup_${LEGACY_EMPLOYEES_KEY}_${ts}`, JSON.stringify(source.employeesBlob));
+    } catch {
+      // overflow / private mode — игнорируем, отчёт всё равно вернётся.
     }
   }
-
-  // ---------- Команды ----------
-  const { data: existingTeams } = await supabase
-    .from('teams')
-    .select('id, legacy_id, name')
-    .eq('owner_id', ownerId);
-
-  /** legacy_id (id из localStorage) -> uuid из БД */
-  const teamLegacyToUuid = new Map<string, string>();
-  /** name -> uuid (для случая, когда у legacy-записи нет id, но команда создана раньше) */
-  const teamNameToUuid = new Map<string, string>();
-
-  for (const t of existingTeams ?? []) {
-    if (t.legacy_id) teamLegacyToUuid.set(String(t.legacy_id), t.id as string);
-    if (t.name) teamNameToUuid.set(t.name as string, t.id as string);
-  }
-
-  const teamsToInsert = legacy.teams.filter((t) => !teamLegacyToUuid.has(String(t.id)));
-  report.skippedTeams = legacy.teams.length - teamsToInsert.length;
-  report.teamsToInsert = teamsToInsert.length;
-
-  if (!dryRun && teamsToInsert.length > 0) {
-    const rows = teamsToInsert.map((t) => ({
-      owner_id: ownerId,
-      legacy_id: String(t.id),
-      name: t.name,
-      color: t.color ?? '#534AB7',
-    }));
-    const { data, error } = await supabase.from('teams').insert(rows).select('id, legacy_id, name');
-    if (error) {
-      report.errors.push(`teams insert: ${error.message}`);
-    } else {
-      for (const r of data ?? []) {
-        if (r.legacy_id) teamLegacyToUuid.set(String(r.legacy_id), r.id as string);
-        if (r.name) teamNameToUuid.set(r.name as string, r.id as string);
-      }
+  if (source.teamsBlob != null) {
+    try {
+      storage.setItem(`legacy_backup_${LEGACY_TEAMS_KEY}_${ts}`, JSON.stringify(source.teamsBlob));
+    } catch {
+      // ignore
     }
   }
+}
 
-  // ---------- Сотрудники ----------
-  const { data: existingEmployees } = await supabase
-    .from('employees')
-    .select('legacy_id')
-    .eq('owner_id', ownerId)
-    .not('legacy_id', 'is', null);
+export interface MigrateLegacyOptions {
+  /** Если true (по умолчанию) — только считает план, ничего не пишет. */
+  dryRun?: boolean;
+  /** Если не передан — читаем localStorage. */
+  source?: LegacySource;
+  /** DI для тестов. */
+  deps?: MigrationDeps;
+}
 
-  const employeeLegacy = new Set<string>((existingEmployees ?? []).map((e) => String(e.legacy_id)));
+/**
+ * Главная точка входа. Считает план; если `dryRun=false` — применяет его
+ * через репозитории (signal + кэш + sync-очередь на сервер).
+ */
+export function migrateLegacy(opts: MigrateLegacyOptions = {}): MigrationReport {
+  const dryRun = opts.dryRun ?? true;
+  const employeesRepo = opts.deps?.employees ?? defaultEmployeesRepo;
+  const teamsRepo = opts.deps?.teams ?? defaultTeamsRepo;
+  const storage = opts.deps?.storage ?? (typeof localStorage !== 'undefined' ? localStorage : undefined);
 
-  const employeesToInsert = legacy.employees.filter((e) => !employeeLegacy.has(String(e.id)));
-  report.skippedEmployees = legacy.employees.length - employeesToInsert.length;
-  report.employeesToInsert = employeesToInsert.length;
+  const source: LegacySource =
+    opts.source ?? (storage ? readLegacyFromStorage(storage) : { employeesBlob: null, teamsBlob: null });
 
-  if (!dryRun && employeesToInsert.length > 0) {
-    const rows = employeesToInsert.map((e) => {
-      // legacy `e.team` — это имя команды, превращаем в team_id если знаем.
-      const teamId = e.team ? (teamNameToUuid.get(e.team) ?? null) : null;
-      // payload: всё, что не вынесено в столбцы.
-      const { id: _id, fullName: _fn, role: _ro, team: _tm, ...rest } = e;
-      void _id;
-      void _fn;
-      void _ro;
-      void _tm;
-      return {
-        owner_id: ownerId,
-        legacy_id: String(e.id),
-        full_name: e.fullName,
-        role: e.role,
-        team_id: teamId,
-        payload: rest,
-      };
-    });
-    const { error } = await supabase.from('employees').insert(rows);
-    if (error) report.errors.push(`employees insert: ${error.message}`);
+  const plan = planMigration(source, {
+    teams: teamsRepo.getAll(),
+    employees: employeesRepo.getAll(),
+  });
+
+  if (dryRun) {
+    return plan.report;
   }
 
-  return report;
+  if (storage) backupLegacy(storage, source);
+  for (const t of plan.teams) teamsRepo.create(t);
+  for (const e of plan.employees) employeesRepo.create(e);
+
+  return { ...plan.report, dryRun: false };
 }

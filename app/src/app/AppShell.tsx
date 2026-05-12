@@ -7,6 +7,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { navItems, routes, type RouteKey } from './routes';
 import { Placeholder } from '@/ui/screens/Placeholder';
 import { CrmScreen } from '@/ui/screens/crm/CrmScreen';
+import { SettingsScreen } from '@/ui/screens/settings/SettingsScreen';
 import { ToastHost } from '@/ui/components/ToastHost';
 import { ConfirmDialogHost } from '@/ui/components/ConfirmDialogHost';
 
@@ -142,9 +143,6 @@ function PersonalScreen(): JSX.Element {
 }
 function ProjectsScreen(): JSX.Element {
   return <Placeholder title="Проекты" />;
-}
-function SettingsScreen(): JSX.Element {
-  return <Placeholder title="Настройки" />;
 }
 function NotFoundScreen(): JSX.Element {
   return <Placeholder title="404" description="Такой страницы нет." />;
