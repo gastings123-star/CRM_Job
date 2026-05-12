@@ -4,11 +4,16 @@ import {
   onAuthChange,
   signInWithGoogle,
   signInWithMagicLink,
-  signOut,
 } from '@/infra/auth';
-import { syncQueue, type SyncStatus } from '@/infra/sync';
 import type { Session } from '@supabase/supabase-js';
+import { AppShell } from './AppShell';
+import { Button } from '@/ui/components/Button';
+import { Field, TextInput } from '@/ui/components/Field';
 
+/**
+ * Корневой компонент: до получения сессии — спиннер; без сессии — экран входа;
+ * с сессией — `AppShell` с роутингом и навигацией.
+ */
 export function Shell() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -18,18 +23,16 @@ export function Shell() {
       setSession(s);
       setLoading(false);
     });
-    const off = onAuthChange((s) => setSession(s));
-    return off;
+    return onAuthChange((s) => setSession(s));
   }, []);
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-slate-400">Загрузка…</div>
+      <div class="flex min-h-screen items-center justify-center text-slate-400">Загрузка…</div>
     );
   }
-
   if (!session) return <SignIn />;
-  return <AuthedApp session={session} />;
+  return <AppShell session={session} />;
 }
 
 // ---------------------------------------------------------------
@@ -68,48 +71,49 @@ function SignIn() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur">
-        <h1 className="mb-4 text-2xl font-semibold">Staff CRM</h1>
+    <div class="flex min-h-screen items-center justify-center">
+      <div class="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur">
+        <h1 class="mb-4 text-2xl font-semibold">Staff CRM</h1>
         {linkSent ? (
-          <p className="text-slate-300">
+          <p class="text-slate-300">
             Ссылка отправлена на <strong>{email}</strong>. Открой её, чтобы войти.
           </p>
         ) : (
           <>
             <button
+              type="button"
               onClick={() => void handleGoogle()}
               disabled={busy !== null}
-              className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white px-4 py-2 font-medium text-slate-900 hover:bg-slate-100 disabled:opacity-60"
+              class="mb-3 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white px-4 py-2 font-medium text-slate-900 hover:bg-slate-100 disabled:opacity-60"
             >
               <GoogleIcon />
               {busy === 'google' ? 'Перенаправляем…' : 'Войти через Google'}
             </button>
-            <div className="my-4 flex items-center gap-3 text-xs text-slate-500">
-              <span className="h-px flex-1 bg-white/10" />
+            <div class="my-4 flex items-center gap-3 text-xs text-slate-500">
+              <span class="h-px flex-1 bg-white/10" />
               или
-              <span className="h-px flex-1 bg-white/10" />
+              <span class="h-px flex-1 bg-white/10" />
             </div>
-            <form onSubmit={handleMagicLink} className="space-y-3">
-              <input
-                type="email"
-                required
-                value={email}
-                onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
-                placeholder="you@example.com"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 outline-none focus:border-blue-500"
-              />
-              <button
-                type="submit"
-                disabled={busy !== null}
-                className="w-full rounded-lg bg-blue-600 px-4 py-2 font-medium hover:bg-blue-500 disabled:opacity-60"
-              >
+            <form onSubmit={handleMagicLink} class="space-y-3">
+              <Field label="Email" required>
+                {(p) => (
+                  <TextInput
+                    {...p}
+                    type="email"
+                    required
+                    value={email}
+                    onInput={(e) => setEmail((e.target as HTMLInputElement).value)}
+                    placeholder="you@example.com"
+                  />
+                )}
+              </Field>
+              <Button type="submit" disabled={busy !== null} class="w-full">
                 {busy === 'magic' ? 'Отправляем…' : 'Прислать ссылку'}
-              </button>
+              </Button>
             </form>
           </>
         )}
-        {authError && <p className="mt-3 text-sm text-red-400">{authError}</p>}
+        {authError && <p class="mt-3 text-sm text-red-400">{authError}</p>}
       </div>
     </div>
   );
@@ -135,68 +139,5 @@ function GoogleIcon() {
         d="M12 5.38c1.62 0 3.07.56 4.21 1.65l3.15-3.15C17.45 2.1 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.01l3.69 2.84C6.73 7.31 9.15 5.38 12 5.38z"
       />
     </svg>
-  );
-}
-
-// ---------------------------------------------------------------
-// Authed
-// ---------------------------------------------------------------
-
-function AuthedApp({ session }: { session: Session }) {
-  const [sync, setSync] = useState<SyncStatus>(syncQueue.getStatus());
-
-  useEffect(() => {
-    syncQueue.start();
-    const off = syncQueue.subscribe(setSync);
-    return () => {
-      off();
-      syncQueue.stop();
-    };
-  }, []);
-
-  return (
-    <div className="min-h-screen">
-      <header className="border-b border-white/10 bg-white/5 px-6 py-4 backdrop-blur">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Staff CRM</h1>
-          <div className="flex items-center gap-4">
-            <SyncBadge status={sync} />
-            <span className="text-sm text-slate-400">{session.user.email}</span>
-            <button
-              onClick={() => void signOut()}
-              className="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/10"
-            >
-              Выйти
-            </button>
-          </div>
-        </div>
-      </header>
-      <main className="p-6">
-        <p className="text-slate-400">
-          v2 в разработке. Этап 2 — инфраструктура: storage, sync, import/export, OAuth.
-        </p>
-      </main>
-    </div>
-  );
-}
-
-function SyncBadge({ status }: { status: SyncStatus }) {
-  const color = !status.online
-    ? 'bg-amber-500/20 text-amber-300'
-    : status.pending > 0
-      ? 'bg-blue-500/20 text-blue-300'
-      : 'bg-emerald-500/20 text-emerald-300';
-  const label = !status.online
-    ? 'Офлайн'
-    : status.pending > 0
-      ? `Синхронизация… ${status.pending}`
-      : 'Синхронизировано';
-  return (
-    <span
-      className={`rounded-full px-2.5 py-0.5 text-xs ${color}`}
-      title={status.lastError ?? undefined}
-    >
-      {label}
-    </span>
   );
 }
