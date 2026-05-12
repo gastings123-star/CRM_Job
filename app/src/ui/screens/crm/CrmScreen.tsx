@@ -56,7 +56,11 @@ export function CrmScreen(): JSX.Element {
     const draft = makeEmployee(values);
     const parsed = EmployeeSchema.safeParse(draft);
     if (!parsed.success) {
-      toast.error('Не удалось сохранить: данные не прошли валидацию');
+      const summary = parsed.error.issues
+        .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
+        .join('; ');
+      console.error('EmployeeSchema validation failed:', parsed.error.issues);
+      toast.error(`Не удалось сохранить: ${summary || 'данные не прошли валидацию'}`);
       return;
     }
     employeesRepo.create(parsed.data);
@@ -237,6 +241,8 @@ function EmployeesTable({ rows, totalQuery, onEdit, onDelete }: EmployeesTablePr
 // ---------------------------------------------------------------
 
 function makeEmployee(v: EmployeeFormValues): unknown {
+  // `load` обязателен в Zod-схеме (без `.default()` на корне),
+  // поэтому передаём пустой объект — внутренние поля заполнятся дефолтами.
   return {
     id: crypto.randomUUID(),
     fullName: v.fullName,
@@ -245,5 +251,6 @@ function makeEmployee(v: EmployeeFormValues): unknown {
     hireDate: v.hireDate,
     email: v.email,
     salary: v.salary,
+    load: {},
   };
 }
