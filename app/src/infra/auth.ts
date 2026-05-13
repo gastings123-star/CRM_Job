@@ -14,7 +14,7 @@ export async function getSession(): Promise<Session | null> {
 export async function signInWithMagicLink(email: string): Promise<void> {
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.origin },
+    options: { emailRedirectTo: window.location.origin + import.meta.env.BASE_URL },
   });
   if (error) throw error;
 }
@@ -25,7 +25,7 @@ export async function signInWithMagicLink(email: string): Promise<void> {
 export async function signInWithGoogle(): Promise<void> {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin },
+    options: { redirectTo: window.location.origin + import.meta.env.BASE_URL },
   });
   if (error) throw error;
 }
