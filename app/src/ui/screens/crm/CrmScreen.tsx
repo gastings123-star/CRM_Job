@@ -2,11 +2,11 @@ import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { EmployeeSchema, type Employee } from '@/data/schema';
-import { employeesRepo } from '@/infra/repos';
+import { employeesRepo, teamsRepo } from '@/infra/repos';
 import { employeeUrl } from '@/app/routes';
 import { Button } from '@/ui/components/Button';
 import { Modal } from '@/ui/components/Modal';
-import { TextInput } from '@/ui/components/Field';
+import { Field, Select, TextInput } from '@/ui/components/Field';
 import { confirm, toast } from '@/state/ui';
 import { crmViewSignal } from '@/state/crm-view';
 import {
@@ -56,6 +56,8 @@ export function CrmScreen(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [sort, setSort] = useState<SortState | null>({ key: 'fullName', dir: 'asc' });
   const [activeList, setActiveList] = useState<SmartListId>('all');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<null | 'team' | 'grade' | 'promotion'>(null);
 
   function toggleSort(key: SortKey): void {
     setSort((s) => {
@@ -152,6 +154,76 @@ export function CrmScreen(): JSX.Element {
     toast.success('Сотрудник удалён');
   }
 
+  // ---- Bulk-actions ----
+
+  function toggleRow(id: string): void {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleVisible(allOn: boolean): void {
+    setSelected((s) => {
+      const next = new Set(s);
+      for (const e of filtered) {
+        if (allOn) next.delete(e.id);
+        else next.add(e.id);
+      }
+      return next;
+    });
+  }
+  function clearSelection(): void {
+    setSelected(new Set());
+  }
+
+  async function bulkDelete(): Promise<void> {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    const ok = await confirm({
+      title: `Удалить ${ids.length} сотрудник(ов)?`,
+      body: 'Действие необратимо. Все выбранные строки будут удалены и из локального кэша, и из Supabase.',
+      confirmLabel: 'Удалить',
+      danger: true,
+    });
+    if (!ok) return;
+    for (const id of ids) employeesRepo.remove(id);
+    clearSelection();
+    toast.success(`Удалено ${ids.length}`);
+  }
+
+  function applyBulkPatch(patch: Partial<Employee>, summary: string): void {
+    const ids = [...selected];
+    for (const id of ids) employeesRepo.update(id, patch);
+    toast.success(`${summary}: ${ids.length}`);
+    setBulkAction(null);
+  }
+
+  function bulkExport(): void {
+    const ids = new Set(selected);
+    const rows = employeesRepo.signal.value.filter((e) => ids.has(e.id));
+    const blob = new Blob([JSON.stringify({ employees: rows }, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `employees-${rows.length}-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.info(`Экспортировано ${rows.length} записей`);
+  }
+
+  const visibleIds = useMemo(() => filtered.map((e) => e.id), [filtered]);
+  const visibleSelected = useMemo(
+    () => visibleIds.filter((id) => selected.has(id)).length,
+    [visibleIds, selected],
+  );
+  const allVisibleSelected = visibleIds.length > 0 && visibleSelected === visibleIds.length;
+
   return (
     <div class="space-y-4">
       <header class="flex flex-wrap items-center gap-3">
@@ -193,8 +265,30 @@ export function CrmScreen(): JSX.Element {
           onQuickEdit={setEditing}
           onDelete={(e) => void handleDelete(e)}
           now={now}
+          selected={selected}
+          allVisibleSelected={allVisibleSelected}
+          onToggleRow={toggleRow}
+          onToggleVisible={toggleVisible}
         />
       )}
+
+      {selected.size > 0 && (
+        <BulkActionBar
+          count={selected.size}
+          onClear={clearSelection}
+          onTeam={() => setBulkAction('team')}
+          onGrade={() => setBulkAction('grade')}
+          onPromotion={() => setBulkAction('promotion')}
+          onExport={bulkExport}
+          onDelete={() => void bulkDelete()}
+        />
+      )}
+
+      <BulkPickerModal
+        kind={bulkAction}
+        onClose={() => setBulkAction(null)}
+        onApply={applyBulkPatch}
+      />
 
       <Modal
         open={createOpen}
@@ -296,6 +390,10 @@ interface EmployeesTableProps {
   onQuickEdit: (e: Employee) => void;
   onDelete: (e: Employee) => void;
   now: Date;
+  selected: Set<string>;
+  allVisibleSelected: boolean;
+  onToggleRow: (id: string) => void;
+  onToggleVisible: (allOn: boolean) => void;
 }
 
 function EmployeesTable({
@@ -307,6 +405,10 @@ function EmployeesTable({
   onQuickEdit,
   onDelete,
   now,
+  selected,
+  allVisibleSelected,
+  onToggleRow,
+  onToggleVisible,
 }: EmployeesTableProps): JSX.Element {
   if (rows.length === 0) {
     return (
@@ -322,6 +424,15 @@ function EmployeesTable({
       <table class="w-full text-sm">
         <thead class="bg-white/5 text-left text-xs uppercase text-slate-400">
           <tr>
+            <th class="w-8 px-3 py-3">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={() => onToggleVisible(allVisibleSelected)}
+                aria-label="Выбрать все видимые строки"
+                class="h-4 w-4 cursor-pointer"
+              />
+            </th>
             <SortableTh sort={sort} k="fullName" onSort={onSort}>ФИО</SortableTh>
             <SortableTh sort={sort} k="role" onSort={onSort}>Должность</SortableTh>
             <SortableTh sort={sort} k="team" onSort={onSort}>Команда</SortableTh>
@@ -339,8 +450,21 @@ function EmployeesTable({
             const risk = calcRiskScore(e, now);
             const loadPct = Number(e.load?.currentPercent) || 0;
             const daysSince = daysSinceLastOneOnOne(e, now);
+            const isSelected = selected.has(e.id);
             return (
-              <tr key={e.id} class="border-t border-white/5 hover:bg-white/5">
+              <tr
+                key={e.id}
+                class={`border-t border-white/5 ${isSelected ? 'bg-blue-500/10' : 'hover:bg-white/5'}`}
+              >
+                <td class="w-8 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleRow(e.id)}
+                    aria-label={`Выбрать ${e.fullName}`}
+                    class="h-4 w-4 cursor-pointer"
+                  />
+                </td>
                 <td class="px-3 py-2.5">
                   <button
                     type="button"
@@ -559,3 +683,155 @@ function makeEmployee(v: EmployeeFormValues): unknown {
 
 // Promotion order kept here for future sorting by promotion column.
 void PROMO_ORDER;
+
+// ---------------------------------------------------------------
+// Bulk-action bar — закреплена снизу, видна при N > 0
+// ---------------------------------------------------------------
+
+function BulkActionBar({
+  count,
+  onClear,
+  onTeam,
+  onGrade,
+  onPromotion,
+  onExport,
+  onDelete,
+}: {
+  count: number;
+  onClear: () => void;
+  onTeam: () => void;
+  onGrade: () => void;
+  onPromotion: () => void;
+  onExport: () => void;
+  onDelete: () => void;
+}): JSX.Element {
+  return (
+    <div
+      role="region"
+      aria-label="Массовые действия"
+      class="sticky bottom-3 z-10 flex flex-wrap items-center gap-2 rounded-2xl border border-blue-500/40 bg-slate-900/95 px-4 py-2 shadow-lg backdrop-blur"
+    >
+      <span class="text-sm text-slate-100 tabular-nums">Выбрано: {count}</span>
+      <Button size="sm" variant="ghost" onClick={onClear}>
+        Снять
+      </Button>
+      <div class="ml-auto flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="secondary" onClick={onTeam}>
+          Команда…
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onGrade}>
+          Грейд…
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onPromotion}>
+          Готовность…
+        </Button>
+        <Button size="sm" variant="secondary" onClick={onExport}>
+          Экспорт JSON
+        </Button>
+        <Button size="sm" variant="danger" onClick={onDelete}>
+          Удалить
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------
+// Модалка-пикер: общая обвязка над тремя вариантами bulk-обновления
+// ---------------------------------------------------------------
+
+const GRADES = ['Junior', 'Middle', 'Senior', 'Lead'] as const;
+const PROMOTIONS = ['не готов', 'готов через 6 мес', 'готов через год', 'готов сейчас'] as const;
+
+function BulkPickerModal({
+  kind,
+  onClose,
+  onApply,
+}: {
+  kind: null | 'team' | 'grade' | 'promotion';
+  onClose: () => void;
+  onApply: (patch: Partial<Employee>, summary: string) => void;
+}): JSX.Element {
+  const teams = teamsRepo.signal.value;
+  const [team, setTeam] = useState('');
+  const [grade, setGrade] = useState<string>('Junior');
+  const [promotion, setPromotion] = useState<string>('не готов');
+
+  const title =
+    kind === 'team'
+      ? 'Назначить команду'
+      : kind === 'grade'
+        ? 'Назначить грейд'
+        : kind === 'promotion'
+          ? 'Назначить готовность к повышению'
+          : '';
+
+  function apply(): void {
+    if (kind === 'team') {
+      onApply({ team }, `Команда «${team || '—'}» назначена`);
+    } else if (kind === 'grade') {
+      onApply({ grade }, `Грейд «${grade}» назначен`);
+    } else if (kind === 'promotion') {
+      onApply({ promotionReadiness: promotion as Employee['promotionReadiness'] }, `Готовность «${promotion}» назначена`);
+    }
+  }
+
+  return (
+    <Modal open={kind !== null} onClose={onClose} title={title} maxWidth="md">
+      <div class="space-y-4">
+        {kind === 'team' && (
+          <Field label="Команда" hint="Пусто — снять команду">
+            {(p) => (
+              <Select {...p} value={team} onChange={(e) => setTeam(e.currentTarget.value)}>
+                <option value="">— без команды —</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
+        {kind === 'grade' && (
+          <Field label="Грейд">
+            {(p) => (
+              <Select {...p} value={grade} onChange={(e) => setGrade(e.currentTarget.value)}>
+                {GRADES.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
+        {kind === 'promotion' && (
+          <Field label="Готовность">
+            {(p) => (
+              <Select
+                {...p}
+                value={promotion}
+                onChange={(e) => setPromotion(e.currentTarget.value)}
+              >
+                {PROMOTIONS.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
+        <div class="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button type="button" onClick={apply}>
+            Применить
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
