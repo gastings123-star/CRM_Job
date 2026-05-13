@@ -11,6 +11,7 @@ import { EmployeeDetailScreen } from '@/ui/screens/crm/EmployeeDetail';
 import { SettingsScreen } from '@/ui/screens/settings/SettingsScreen';
 import { DashboardScreen } from '@/ui/screens/dashboard/DashboardScreen';
 import { TeamsScreen } from '@/ui/screens/teams/TeamsScreen';
+import { ProjectsScreen } from '@/ui/screens/projects/ProjectsScreen';
 import { ToastHost } from '@/ui/components/ToastHost';
 import { ConfirmDialogHost } from '@/ui/components/ConfirmDialogHost';
 
@@ -142,9 +143,6 @@ function DevelopmentScreen(): JSX.Element {
 }
 function PersonalScreen(): JSX.Element {
   return <Placeholder title="Личное" />;
-}
-function ProjectsScreen(): JSX.Element {
-  return <Placeholder title="Проекты" />;
 }
 function NotFoundScreen(): JSX.Element {
   return <Placeholder title="404" description="Такой страницы нет." />;
