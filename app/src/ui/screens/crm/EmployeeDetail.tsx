@@ -2,7 +2,8 @@ import type { JSX } from 'preact';
 import { useLocation, useRoute } from 'preact-iso';
 import { useMemo, useState } from 'preact/hooks';
 import { employeesRepo } from '@/infra/repos';
-import { routes } from '@/app/routes';
+import { employeeUrl, routes } from '@/app/routes';
+import { crmViewSignal } from '@/state/crm-view';
 import { Tabs, type TabItem } from '@/ui/components/Tabs';
 import { Button } from '@/ui/components/Button';
 import { BasicInfoTab } from './tabs/BasicInfoTab';
@@ -40,6 +41,18 @@ export function EmployeeDetailScreen(): JSX.Element {
   const employee = useMemo(() => employees.find((e) => e.id === id) ?? null, [employees, id]);
   const [active, setActive] = useState<string>('basic');
 
+  // Лента из /crm (с применёнными smart list / фильтром / сортировкой).
+  // Если экран открыт по прямой ссылке — fallback на репо в дефолтном порядке.
+  const view = crmViewSignal.value;
+  const navIds = useMemo<string[]>(
+    () => (view.length > 0 ? view : employees.map((e) => e.id)),
+    [view, employees],
+  );
+  const navIdx = navIds.indexOf(id);
+  const prevId: string | null = navIdx > 0 ? (navIds[navIdx - 1] ?? null) : null;
+  const nextId: string | null =
+    navIdx >= 0 && navIdx < navIds.length - 1 ? (navIds[navIdx + 1] ?? null) : null;
+
   if (!employee) {
     return (
       <div class="space-y-4">
@@ -60,15 +73,42 @@ export function EmployeeDetailScreen(): JSX.Element {
           ← К списку
         </Button>
         <Avatar name={employee.fullName} />
-        <div>
-          <h2 class="text-2xl font-semibold leading-tight">
+        <div class="min-w-0 flex-1">
+          <h2 class="text-2xl font-semibold leading-tight truncate">
             {employee.fullName || <span class="text-slate-500">— без имени —</span>}
           </h2>
-          <p class="text-sm text-slate-400">
+          <p class="text-sm text-slate-400 truncate">
             {[employee.role, employee.team || 'без команды', employee.grade]
               .filter(Boolean)
               .join(' · ')}
           </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!prevId}
+            onClick={() => prevId && loc.route(employeeUrl(prevId))}
+            title="Предыдущий сотрудник в текущей ленте"
+            aria-label="Предыдущий сотрудник"
+          >
+            ←
+          </Button>
+          {navIdx >= 0 && navIds.length > 0 && (
+            <span class="text-xs text-slate-400 tabular-nums">
+              {navIdx + 1} / {navIds.length}
+            </span>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={!nextId}
+            onClick={() => nextId && loc.route(employeeUrl(nextId))}
+            title="Следующий сотрудник"
+            aria-label="Следующий сотрудник"
+          >
+            →
+          </Button>
         </div>
       </header>
 

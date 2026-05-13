@@ -8,43 +8,63 @@ import { Button } from '@/ui/components/Button';
 import { Modal } from '@/ui/components/Modal';
 import { TextInput } from '@/ui/components/Field';
 import { confirm, toast } from '@/state/ui';
+import { crmViewSignal } from '@/state/crm-view';
+import {
+  countMatching,
+  daysSinceLastOneOnOne,
+  SMART_LISTS,
+  type SmartList,
+  type SmartListId,
+} from '@/domain/crm-lists';
+import { calcRiskScore } from '@/domain/risk';
 import { EmployeeForm, type EmployeeFormValues } from './EmployeeForm';
 
 /**
  * Экран `/crm` — список сотрудников + CRUD через модалки.
- * Источник данных: `employeesRepo` (signal). При монтировании пробуем
- * подтянуть свежие данные с сервера; ошибки только тостом — UI остаётся
- * работоспособным с локальным кэшем.
+ *
+ * Состав:
+ *  - smart lists сверху (быстрые срезы: «Под риском», «ФОТ просрочен», …)
+ *  - поиск-строка по имени/роли/email
+ *  - сортируемые колонки таблицы
+ *  - расширенная строка: команда, риск-чип, % загрузки, готовность, дни с 1-on-1
+ *
+ * При изменении видимого списка обновляем `crmViewSignal` —
+ * EmployeeDetailScreen использует его для prev/next-навигации.
  */
-type SortKey = 'fullName' | 'role' | 'grade' | 'hireDate' | 'email';
+type SortKey = 'fullName' | 'role' | 'grade' | 'hireDate' | 'team' | 'risk' | 'load' | 'oneonone';
 type SortDir = 'asc' | 'desc';
 interface SortState {
   key: SortKey;
   dir: SortDir;
 }
 
-// Порядок грейдов — для логичной сортировки колонки «Грейд» по уровню,
-// а не по алфавиту (где Senior < Junior).
 const GRADE_ORDER: Record<string, number> = { Junior: 1, Middle: 2, Senior: 3, Lead: 4 };
+const PROMO_ORDER: Record<string, number> = {
+  'не готов': 0,
+  'готов через год': 1,
+  'готов через 6 мес': 2,
+  'готов сейчас': 3,
+};
 
 export function CrmScreen(): JSX.Element {
   const loc = useLocation();
   const employees = employeesRepo.signal.value;
+  const now = useMemo(() => new Date(), []);
   const [query, setQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(false);
   const [sort, setSort] = useState<SortState | null>({ key: 'fullName', dir: 'asc' });
+  const [activeList, setActiveList] = useState<SmartListId>('all');
 
   function toggleSort(key: SortKey): void {
     setSort((s) => {
       if (s?.key !== key) return { key, dir: 'asc' };
       if (s.dir === 'asc') return { key, dir: 'desc' };
-      return null; // 3-й клик — снять сортировку
+      return null;
     });
   }
 
-  // Одна загрузка при первом монтировании экрана.
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -65,21 +85,29 @@ export function CrmScreen(): JSX.Element {
   }, []);
 
   const filtered = useMemo(() => {
+    const list = SMART_LISTS.find((l) => l.id === activeList) ?? SMART_LISTS[0]!;
+    const byList = employees.filter((e) => list.predicate(e, now));
     const q = query.trim().toLowerCase();
     const base =
       q === ''
-        ? employees
-        : employees.filter(
+        ? byList
+        : byList.filter(
             (e) =>
-              e.fullName.toLowerCase().includes(q) ||
-              e.role.toLowerCase().includes(q) ||
-              e.email.toLowerCase().includes(q),
+              (e.fullName ?? '').toLowerCase().includes(q) ||
+              (e.role ?? '').toLowerCase().includes(q) ||
+              (e.email ?? '').toLowerCase().includes(q) ||
+              (e.team ?? '').toLowerCase().includes(q),
           );
     if (!sort) return base;
     const dir = sort.dir === 'asc' ? 1 : -1;
-    const cmp = compareBy(sort.key);
+    const cmp = compareBy(sort.key, now);
     return [...base].sort((a, b) => cmp(a, b) * dir);
-  }, [employees, query, sort]);
+  }, [employees, query, sort, activeList, now]);
+
+  // Синхронизируем «видимую ленту» в глобальном сигнале — для prev/next.
+  useEffect(() => {
+    crmViewSignal.value = filtered.map((e) => e.id);
+  }, [filtered]);
 
   function handleCreate(values: EmployeeFormValues): void {
     const draft = makeEmployee(values);
@@ -125,22 +153,29 @@ export function CrmScreen(): JSX.Element {
   }
 
   return (
-    <div class="space-y-6">
+    <div class="space-y-4">
       <header class="flex flex-wrap items-center gap-3">
         <h2 class="text-2xl font-semibold">CRM — сотрудники</h2>
         <span class="text-sm text-slate-400">
-          {employees.length === 0 ? 'нет записей' : `${employees.length} в базе`}
+          {employees.length === 0 ? 'нет записей' : `${filtered.length} из ${employees.length}`}
         </span>
         <div class="ml-auto flex items-center gap-2">
           <TextInput
             value={query}
-            onInput={(e) => setQuery((e.currentTarget).value)}
-            placeholder="Поиск по имени / роли / email"
-            class="!w-72"
+            onInput={(e) => setQuery(e.currentTarget.value)}
+            placeholder="Поиск по имени / роли / email / команде"
+            class="!w-80"
           />
           <Button onClick={() => setCreateOpen(true)}>+ Добавить</Button>
         </div>
       </header>
+
+      <SmartListBar
+        employees={employees}
+        active={activeList}
+        onChange={setActiveList}
+        now={now}
+      />
 
       {loading && employees.length === 0 ? (
         <div class="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-slate-400">
@@ -157,6 +192,7 @@ export function CrmScreen(): JSX.Element {
           onOpen={(e) => loc.route(employeeUrl(e.id))}
           onQuickEdit={setEditing}
           onDelete={(e) => void handleDelete(e)}
+          now={now}
         />
       )}
 
@@ -179,18 +215,62 @@ export function CrmScreen(): JSX.Element {
         title={editing ? `Редактирование: ${editing.fullName || 'Без имени'}` : ''}
         maxWidth="lg"
       >
-        <EmployeeForm
-          initial={editing}
-          onSubmit={handleEdit}
-          onCancel={() => setEditing(null)}
-        />
+        <EmployeeForm initial={editing} onSubmit={handleEdit} onCancel={() => setEditing(null)} />
       </Modal>
     </div>
   );
 }
 
 // ---------------------------------------------------------------
-// Подкомпоненты
+// Smart list bar
+// ---------------------------------------------------------------
+
+function SmartListBar({
+  employees,
+  active,
+  onChange,
+  now,
+}: {
+  employees: Employee[];
+  active: SmartListId;
+  onChange: (id: SmartListId) => void;
+  now: Date;
+}): JSX.Element {
+  const TONE_ACTIVE: Record<SmartList['tone'], string> = {
+    neutral: 'bg-white/10 text-slate-100',
+    red: 'bg-red-500/25 text-red-200',
+    amber: 'bg-amber-500/25 text-amber-200',
+    emerald: 'bg-emerald-500/25 text-emerald-200',
+    blue: 'bg-blue-500/25 text-blue-200',
+    purple: 'bg-purple-500/25 text-purple-200',
+  };
+  return (
+    <nav class="flex flex-wrap gap-1.5" aria-label="Срезы списка">
+      {SMART_LISTS.map((l) => {
+        const isActive = l.id === active;
+        const count = l.id === 'all' ? employees.length : countMatching(employees, l, now);
+        return (
+          <button
+            key={l.id}
+            type="button"
+            onClick={() => onChange(l.id)}
+            class={`rounded-full px-3 py-1 text-xs transition-colors ${
+              isActive
+                ? TONE_ACTIVE[l.tone]
+                : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200'
+            }`}
+          >
+            {l.label}
+            <span class="ml-1.5 tabular-nums text-slate-400/80">{count}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+// ---------------------------------------------------------------
+// Empty state и таблица
 // ---------------------------------------------------------------
 
 function EmptyState({ onCreate }: { onCreate: () => void }): JSX.Element {
@@ -212,11 +292,10 @@ interface EmployeesTableProps {
   totalQuery: string;
   sort: SortState | null;
   onSort: (key: SortKey) => void;
-  /** Открыть полную карточку сотрудника (/crm/:id). */
   onOpen: (e: Employee) => void;
-  /** Быстрое редактирование в модалке (минимальный набор полей). */
   onQuickEdit: (e: Employee) => void;
   onDelete: (e: Employee) => void;
+  now: Date;
 }
 
 function EmployeesTable({
@@ -227,59 +306,168 @@ function EmployeesTable({
   onOpen,
   onQuickEdit,
   onDelete,
+  now,
 }: EmployeesTableProps): JSX.Element {
   if (rows.length === 0) {
     return (
       <div class="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-slate-400">
-        По запросу «{totalQuery}» ничего не найдено
+        {totalQuery
+          ? <>По запросу «{totalQuery}» ничего не найдено</>
+          : <>В этом срезе пусто</>}
       </div>
     );
   }
   return (
-    <div class="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+    <div class="overflow-x-auto rounded-2xl border border-white/10 bg-white/5">
       <table class="w-full text-sm">
         <thead class="bg-white/5 text-left text-xs uppercase text-slate-400">
           <tr>
             <SortableTh sort={sort} k="fullName" onSort={onSort}>ФИО</SortableTh>
             <SortableTh sort={sort} k="role" onSort={onSort}>Должность</SortableTh>
+            <SortableTh sort={sort} k="team" onSort={onSort}>Команда</SortableTh>
             <SortableTh sort={sort} k="grade" onSort={onSort}>Грейд</SortableTh>
+            <SortableTh sort={sort} k="risk" onSort={onSort}>Риск</SortableTh>
+            <SortableTh sort={sort} k="load" onSort={onSort}>Загрузка</SortableTh>
+            <th class="px-3 py-3 font-medium text-slate-400">Готовность</th>
+            <SortableTh sort={sort} k="oneonone" onSort={onSort}>1-on-1</SortableTh>
             <SortableTh sort={sort} k="hireDate" onSort={onSort}>Дата найма</SortableTh>
-            <SortableTh sort={sort} k="email" onSort={onSort}>Email</SortableTh>
-            <th class="px-4 py-3 text-right font-medium">Действия</th>
+            <th class="px-3 py-3 text-right font-medium">Действия</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((e) => (
-            <tr key={e.id} class="border-t border-white/5 hover:bg-white/5">
-              <td class="px-4 py-2.5">
-                <button
-                  type="button"
-                  class="text-left text-blue-300 hover:text-blue-200 hover:underline"
-                  onClick={() => onOpen(e)}
-                >
-                  {e.fullName || <span class="text-slate-500">— без имени —</span>}
-                </button>
-              </td>
-              <td class="px-4 py-2.5 text-slate-300">{e.role || '—'}</td>
-              <td class="px-4 py-2.5 text-slate-300">{e.grade}</td>
-              <td class="px-4 py-2.5 text-slate-300">{e.hireDate || '—'}</td>
-              <td class="px-4 py-2.5 text-slate-300">{e.email || '—'}</td>
-              <td class="px-4 py-2.5 text-right">
-                <Button size="sm" variant="ghost" onClick={() => onOpen(e)}>
-                  Открыть
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => onQuickEdit(e)}>
-                  Правка
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => onDelete(e)}>
-                  Удалить
-                </Button>
-              </td>
-            </tr>
-          ))}
+          {rows.map((e) => {
+            const risk = calcRiskScore(e, now);
+            const loadPct = Number(e.load?.currentPercent) || 0;
+            const daysSince = daysSinceLastOneOnOne(e, now);
+            return (
+              <tr key={e.id} class="border-t border-white/5 hover:bg-white/5">
+                <td class="px-3 py-2.5">
+                  <button
+                    type="button"
+                    class="text-left text-blue-300 hover:text-blue-200 hover:underline"
+                    onClick={() => onOpen(e)}
+                  >
+                    {e.fullName || <span class="text-slate-500">— без имени —</span>}
+                  </button>
+                </td>
+                <td class="px-3 py-2.5 text-slate-300">{e.role || '—'}</td>
+                <td class="px-3 py-2.5 text-slate-300">{e.team || <span class="text-slate-500">—</span>}</td>
+                <td class="px-3 py-2.5 text-slate-300">{e.grade}</td>
+                <td class="px-3 py-2.5">
+                  <RiskBadge level={risk.level} score={risk.score} />
+                </td>
+                <td class="px-3 py-2.5">
+                  <LoadBar percent={loadPct} />
+                </td>
+                <td class="px-3 py-2.5">
+                  <PromotionDot value={e.promotionReadiness} />
+                </td>
+                <td class="px-3 py-2.5">
+                  <OneOnOneCell days={daysSince} />
+                </td>
+                <td class="px-3 py-2.5 text-slate-300 tabular-nums">{e.hireDate || '—'}</td>
+                <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                  <Button size="sm" variant="ghost" onClick={() => onOpen(e)}>
+                    Открыть
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onQuickEdit(e)}>
+                    Правка
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => onDelete(e)}>
+                    ×
+                  </Button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------
+// Чипы / индикаторы
+// ---------------------------------------------------------------
+
+function RiskBadge({
+  level,
+  score,
+}: {
+  level: 'low' | 'medium' | 'high';
+  score: number;
+}): JSX.Element {
+  const cls: Record<'low' | 'medium' | 'high', string> = {
+    low: 'bg-emerald-500/20 text-emerald-300',
+    medium: 'bg-amber-500/20 text-amber-300',
+    high: 'bg-red-500/20 text-red-300',
+  };
+  const label: Record<'low' | 'medium' | 'high', string> = {
+    low: 'низкий',
+    medium: 'средний',
+    high: 'высокий',
+  };
+  return (
+    <span
+      class={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs ${cls[level]}`}
+      title={`Скор риска: ${score}`}
+    >
+      <span class="inline-block h-1.5 w-1.5 rounded-full bg-current" />
+      {label[level]}
+    </span>
+  );
+}
+
+function LoadBar({ percent }: { percent: number }): JSX.Element {
+  const p = Math.max(0, Math.min(150, percent));
+  const tone =
+    p > 100
+      ? 'bg-red-500/70'
+      : p >= 80
+        ? 'bg-amber-500/70'
+        : p > 0
+          ? 'bg-emerald-500/70'
+          : 'bg-white/10';
+  return (
+    <div class="flex items-center gap-2 text-xs text-slate-300 tabular-nums">
+      <div class="h-1.5 w-16 overflow-hidden rounded-full bg-white/5">
+        <div class={`h-full ${tone}`} style={{ width: `${Math.min(p, 100)}%` }} />
+      </div>
+      <span>{percent}%</span>
+    </div>
+  );
+}
+
+function PromotionDot({ value }: { value: string }): JSX.Element {
+  const map: Record<string, { cls: string; title: string }> = {
+    'готов сейчас': { cls: 'bg-emerald-400', title: 'Готов к повышению сейчас' },
+    'готов через 6 мес': { cls: 'bg-blue-400', title: 'Готов через 6 мес' },
+    'готов через год': { cls: 'bg-amber-400', title: 'Готов через год' },
+    'не готов': { cls: 'bg-slate-500', title: 'Не готов к повышению' },
+  };
+  const m = map[value] ?? map['не готов']!;
+  return (
+    <span class="inline-flex items-center gap-1.5 text-xs text-slate-300" title={m.title}>
+      <span class={`inline-block h-2 w-2 rounded-full ${m.cls}`} />
+      {value || '—'}
+    </span>
+  );
+}
+
+function OneOnOneCell({ days }: { days: number | null }): JSX.Element {
+  if (days === null) {
+    return <span class="text-xs text-red-300/80">никогда</span>;
+  }
+  const tone =
+    days > 60
+      ? 'text-red-300'
+      : days > 30
+        ? 'text-amber-300'
+        : 'text-slate-300';
+  return (
+    <span class={`text-xs tabular-nums ${tone}`} title={`Последний 1-on-1 ${days} д. назад`}>
+      {days} д
+    </span>
   );
 }
 
@@ -301,7 +489,7 @@ function SortableTh({
   const active = sort?.key === k;
   const arrow = active ? (sort.dir === 'asc' ? '▲' : '▼') : '';
   return (
-    <th class="px-4 py-3 font-medium">
+    <th class="px-3 py-3 font-medium">
       <button
         type="button"
         onClick={() => onSort(k)}
@@ -316,31 +504,47 @@ function SortableTh({
   );
 }
 
-function compareBy(key: SortKey): (a: Employee, b: Employee) => number {
+function compareBy(key: SortKey, now: Date): (a: Employee, b: Employee) => number {
   const collator = new Intl.Collator('ru', { sensitivity: 'base' });
   if (key === 'grade') {
     return (a, b) => (GRADE_ORDER[a.grade] ?? 99) - (GRADE_ORDER[b.grade] ?? 99);
   }
   if (key === 'hireDate') {
-    // ISO YYYY-MM-DD, лексикографический порядок совпадает с хронологическим;
-    // пустые даты — в конец при asc.
     return (a, b) => {
       const av = a.hireDate || '￿';
       const bv = b.hireDate || '￿';
       return av < bv ? -1 : av > bv ? 1 : 0;
     };
   }
-  return (a, b) => collator.compare(String(a[key] ?? ''), String(b[key] ?? ''));
+  if (key === 'risk') {
+    return (a, b) => calcRiskScore(a, now).score - calcRiskScore(b, now).score;
+  }
+  if (key === 'load') {
+    return (a, b) => (Number(a.load?.currentPercent) || 0) - (Number(b.load?.currentPercent) || 0);
+  }
+  if (key === 'oneonone') {
+    // Дней с последнего 1-on-1. null (никогда) — крайнее значение.
+    return (a, b) => {
+      const av = daysSinceLastOneOnOne(a, now);
+      const bv = daysSinceLastOneOnOne(b, now);
+      const an = av ?? Number.POSITIVE_INFINITY;
+      const bn = bv ?? Number.POSITIVE_INFINITY;
+      return an - bn;
+    };
+  }
+  if (key === 'team') {
+    return (a, b) => collator.compare(a.team || '￿', b.team || '￿');
+  }
+  // Доп. вычисляемые поля учтены выше; в остальных случаях — текстовая сортировка.
+  return (a, b) => collator.compare(String(a[key as 'fullName' | 'role' | 'email'] ?? ''),
+                                    String(b[key as 'fullName' | 'role' | 'email'] ?? ''));
 }
 
-// ---------------------------------------------------------------
-// Конструктор Employee из формы — пустые поля + значения из формы.
-// Остальные поля заполнятся дефолтами Zod при .parse().
-// ---------------------------------------------------------------
-
+/**
+ * Конструктор Employee из формы — пустые поля + значения из формы.
+ * Остальные поля заполнятся дефолтами Zod при .parse().
+ */
 function makeEmployee(v: EmployeeFormValues): unknown {
-  // `load` обязателен в Zod-схеме (без `.default()` на корне),
-  // поэтому передаём пустой объект — внутренние поля заполнятся дефолтами.
   return {
     id: crypto.randomUUID(),
     fullName: v.fullName,
@@ -352,3 +556,6 @@ function makeEmployee(v: EmployeeFormValues): unknown {
     load: {},
   };
 }
+
+// Promotion order kept here for future sorting by promotion column.
+void PROMO_ORDER;
