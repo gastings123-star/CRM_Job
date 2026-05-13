@@ -17,6 +17,8 @@ import { DevelopmentScreen } from '@/ui/screens/development/DevelopmentScreen';
 import { PersonalScreen } from '@/ui/screens/personal/PersonalScreen';
 import { ToastHost } from '@/ui/components/ToastHost';
 import { ConfirmDialogHost } from '@/ui/components/ConfirmDialogHost';
+import { CommandPaletteHost } from '@/ui/components/CommandPaletteHost';
+import { openCommandPalette } from '@/state/command-palette';
 
 /**
  * Авторизованная часть приложения: топ-бар, навигация, область контента.
@@ -43,6 +45,7 @@ export function AppShell({ session }: { session: Session }): JSX.Element {
         </main>
         <ToastHost />
         <ConfirmDialogHost />
+        <CommandPaletteHost />
       </div>
     </LocationProvider>
   );
@@ -70,6 +73,15 @@ function TopBar({ session }: { session: Session }): JSX.Element {
         <h1 class="text-lg font-semibold">Staff CRM</h1>
         <Nav />
         <div class="ml-auto flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => openCommandPalette()}
+            class="hidden items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10 md:inline-flex"
+            title="Поиск / навигация (Cmd+K)"
+          >
+            <span>Поиск</span>
+            <span class="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">⌘K</span>
+          </button>
           <SyncBadge status={sync} />
           <span class="hidden text-sm text-slate-400 sm:inline">{session.user.email}</span>
           <button
