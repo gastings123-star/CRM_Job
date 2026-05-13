@@ -9,6 +9,8 @@ import { BasicInfoTab } from './tabs/BasicInfoTab';
 import { LoadTab } from './tabs/LoadTab';
 import { SkillsTab } from './tabs/SkillsTab';
 import { GoalsTab } from './tabs/GoalsTab';
+import { TasksTab } from './tabs/TasksTab';
+import { OneOnOneTab } from './tabs/OneOnOneTab';
 
 /**
  * Экран `/crm/:id` — карточка одного сотрудника с табами.
@@ -23,8 +25,8 @@ const TABS: TabItem[] = [
   { id: 'skills', label: '3. Навыки' },
   { id: 'projects', label: '4. История проектов', disabled: true },
   { id: 'extra', label: '5. Дополнительно', disabled: true },
-  { id: 'tasks', label: '6. Задачи', disabled: true },
-  { id: 'oneonone', label: '7. 1-on-1', disabled: true },
+  { id: 'tasks', label: '6. Задачи' },
+  { id: 'oneonone', label: '7. 1-on-1' },
   { id: 'goals', label: '8. Цели' },
 ];
 
@@ -74,6 +76,8 @@ export function EmployeeDetailScreen(): JSX.Element {
         {active === 'basic' && <BasicInfoTab employee={employee} />}
         {active === 'load' && <LoadTab employee={employee} />}
         {active === 'skills' && <SkillsTab employee={employee} />}
+        {active === 'tasks' && <TasksTab employee={employee} />}
+        {active === 'oneonone' && <OneOnOneTab employee={employee} />}
         {active === 'goals' && <GoalsTab employee={employee} />}
       </div>
     </div>

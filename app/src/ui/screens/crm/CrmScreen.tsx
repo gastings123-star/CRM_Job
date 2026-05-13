@@ -16,6 +16,17 @@ import { EmployeeForm, type EmployeeFormValues } from './EmployeeForm';
  * подтянуть свежие данные с сервера; ошибки только тостом — UI остаётся
  * работоспособным с локальным кэшем.
  */
+type SortKey = 'fullName' | 'role' | 'grade' | 'hireDate' | 'email';
+type SortDir = 'asc' | 'desc';
+interface SortState {
+  key: SortKey;
+  dir: SortDir;
+}
+
+// Порядок грейдов — для логичной сортировки колонки «Грейд» по уровню,
+// а не по алфавиту (где Senior < Junior).
+const GRADE_ORDER: Record<string, number> = { Junior: 1, Middle: 2, Senior: 3, Lead: 4 };
+
 export function CrmScreen(): JSX.Element {
   const loc = useLocation();
   const employees = employeesRepo.signal.value;
@@ -23,6 +34,15 @@ export function CrmScreen(): JSX.Element {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sort, setSort] = useState<SortState | null>({ key: 'fullName', dir: 'asc' });
+
+  function toggleSort(key: SortKey): void {
+    setSort((s) => {
+      if (s?.key !== key) return { key, dir: 'asc' };
+      if (s.dir === 'asc') return { key, dir: 'desc' };
+      return null; // 3-й клик — снять сортировку
+    });
+  }
 
   // Одна загрузка при первом монтировании экрана.
   useEffect(() => {
@@ -46,14 +66,20 @@ export function CrmScreen(): JSX.Element {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return employees;
-    return employees.filter(
-      (e) =>
-        e.fullName.toLowerCase().includes(q) ||
-        e.role.toLowerCase().includes(q) ||
-        e.email.toLowerCase().includes(q),
-    );
-  }, [employees, query]);
+    const base =
+      q === ''
+        ? employees
+        : employees.filter(
+            (e) =>
+              e.fullName.toLowerCase().includes(q) ||
+              e.role.toLowerCase().includes(q) ||
+              e.email.toLowerCase().includes(q),
+          );
+    if (!sort) return base;
+    const dir = sort.dir === 'asc' ? 1 : -1;
+    const cmp = compareBy(sort.key);
+    return [...base].sort((a, b) => cmp(a, b) * dir);
+  }, [employees, query, sort]);
 
   function handleCreate(values: EmployeeFormValues): void {
     const draft = makeEmployee(values);
@@ -126,6 +152,8 @@ export function CrmScreen(): JSX.Element {
         <EmployeesTable
           rows={filtered}
           totalQuery={query}
+          sort={sort}
+          onSort={toggleSort}
           onOpen={(e) => loc.route(employeeUrl(e.id))}
           onQuickEdit={setEditing}
           onDelete={(e) => void handleDelete(e)}
@@ -182,6 +210,8 @@ function EmptyState({ onCreate }: { onCreate: () => void }): JSX.Element {
 interface EmployeesTableProps {
   rows: Employee[];
   totalQuery: string;
+  sort: SortState | null;
+  onSort: (key: SortKey) => void;
   /** Открыть полную карточку сотрудника (/crm/:id). */
   onOpen: (e: Employee) => void;
   /** Быстрое редактирование в модалке (минимальный набор полей). */
@@ -192,6 +222,8 @@ interface EmployeesTableProps {
 function EmployeesTable({
   rows,
   totalQuery,
+  sort,
+  onSort,
   onOpen,
   onQuickEdit,
   onDelete,
@@ -208,11 +240,11 @@ function EmployeesTable({
       <table class="w-full text-sm">
         <thead class="bg-white/5 text-left text-xs uppercase text-slate-400">
           <tr>
-            <th class="px-4 py-3 font-medium">ФИО</th>
-            <th class="px-4 py-3 font-medium">Должность</th>
-            <th class="px-4 py-3 font-medium">Грейд</th>
-            <th class="px-4 py-3 font-medium">Дата найма</th>
-            <th class="px-4 py-3 font-medium">Email</th>
+            <SortableTh sort={sort} k="fullName" onSort={onSort}>ФИО</SortableTh>
+            <SortableTh sort={sort} k="role" onSort={onSort}>Должность</SortableTh>
+            <SortableTh sort={sort} k="grade" onSort={onSort}>Грейд</SortableTh>
+            <SortableTh sort={sort} k="hireDate" onSort={onSort}>Дата найма</SortableTh>
+            <SortableTh sort={sort} k="email" onSort={onSort}>Email</SortableTh>
             <th class="px-4 py-3 text-right font-medium">Действия</th>
           </tr>
         </thead>
@@ -249,6 +281,56 @@ function EmployeesTable({
       </table>
     </div>
   );
+}
+
+// ---------------------------------------------------------------
+// Сортировка
+// ---------------------------------------------------------------
+
+function SortableTh({
+  k,
+  sort,
+  onSort,
+  children,
+}: {
+  k: SortKey;
+  sort: SortState | null;
+  onSort: (k: SortKey) => void;
+  children: preact.ComponentChildren;
+}): JSX.Element {
+  const active = sort?.key === k;
+  const arrow = active ? (sort.dir === 'asc' ? '▲' : '▼') : '';
+  return (
+    <th class="px-4 py-3 font-medium">
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        class={`inline-flex items-center gap-1.5 uppercase tracking-wide transition-colors ${
+          active ? 'text-slate-100' : 'text-slate-400 hover:text-slate-200'
+        }`}
+      >
+        {children}
+        <span class="text-[10px]">{arrow || '↕'}</span>
+      </button>
+    </th>
+  );
+}
+
+function compareBy(key: SortKey): (a: Employee, b: Employee) => number {
+  const collator = new Intl.Collator('ru', { sensitivity: 'base' });
+  if (key === 'grade') {
+    return (a, b) => (GRADE_ORDER[a.grade] ?? 99) - (GRADE_ORDER[b.grade] ?? 99);
+  }
+  if (key === 'hireDate') {
+    // ISO YYYY-MM-DD, лексикографический порядок совпадает с хронологическим;
+    // пустые даты — в конец при asc.
+    return (a, b) => {
+      const av = a.hireDate || '￿';
+      const bv = b.hireDate || '￿';
+      return av < bv ? -1 : av > bv ? 1 : 0;
+    };
+  }
+  return (a, b) => collator.compare(String(a[key] ?? ''), String(b[key] ?? ''));
 }
 
 // ---------------------------------------------------------------
