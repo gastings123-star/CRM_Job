@@ -10,6 +10,7 @@ import { CrmScreen } from '@/ui/screens/crm/CrmScreen';
 import { EmployeeDetailScreen } from '@/ui/screens/crm/EmployeeDetail';
 import { SettingsScreen } from '@/ui/screens/settings/SettingsScreen';
 import { DashboardScreen } from '@/ui/screens/dashboard/DashboardScreen';
+import { TeamsScreen } from '@/ui/screens/teams/TeamsScreen';
 import { ToastHost } from '@/ui/components/ToastHost';
 import { ConfirmDialogHost } from '@/ui/components/ConfirmDialogHost';
 
@@ -27,6 +28,7 @@ export function AppShell({ session }: { session: Session }): JSX.Element {
             <Route path={routes.dashboard.path} component={DashboardScreen} />
             <Route path={routes.crm.path} component={CrmScreen} />
             <Route path={employeeDetailPath} component={EmployeeDetailScreen} />
+            <Route path={routes.teams.path} component={TeamsScreen} />
             <Route path={routes.calendar.path} component={CalendarScreen} />
             <Route path={routes.development.path} component={DevelopmentScreen} />
             <Route path={routes.personal.path} component={PersonalScreen} />
