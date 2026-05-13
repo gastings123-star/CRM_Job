@@ -9,6 +9,7 @@ import { Modal } from '@/ui/components/Modal';
 import { Field, Select, TextInput } from '@/ui/components/Field';
 import { confirm, toast } from '@/state/ui';
 import { crmViewSignal } from '@/state/crm-view';
+import { downloadEmployeesCsv, downloadEmployeesXlsx } from '@/infra/importExport';
 import {
   countMatching,
   daysSinceLastOneOnOne,
@@ -238,6 +239,7 @@ export function CrmScreen(): JSX.Element {
             placeholder="Поиск по имени / роли / email / команде"
             class="!w-80"
           />
+          <ExportMenu rows={filtered} totalLabel={`${filtered.length}`} />
           <Button onClick={() => setCreateOpen(true)}>+ Добавить</Button>
         </div>
       </header>
@@ -683,6 +685,52 @@ function makeEmployee(v: EmployeeFormValues): unknown {
 
 // Promotion order kept here for future sorting by promotion column.
 void PROMO_ORDER;
+
+// ---------------------------------------------------------------
+// Меню экспорта (текущего среза)
+// ---------------------------------------------------------------
+
+function ExportMenu({ rows, totalLabel }: { rows: Employee[]; totalLabel: string }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <div class="relative">
+      <Button variant="secondary" onClick={() => setOpen((o) => !o)} disabled={rows.length === 0}>
+        Экспорт ({totalLabel}) ▾
+      </Button>
+      {open && (
+        <>
+          <div
+            class="fixed inset-0 z-20"
+            onClick={() => setOpen(false)}
+            aria-hidden="true"
+          />
+          <div class="absolute right-0 top-full z-30 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-xl">
+            <button
+              type="button"
+              class="block w-full px-3 py-2 text-left text-sm hover:bg-white/10"
+              onClick={() => {
+                downloadEmployeesXlsx(rows);
+                setOpen(false);
+              }}
+            >
+              .xlsx (Excel)
+            </button>
+            <button
+              type="button"
+              class="block w-full px-3 py-2 text-left text-sm hover:bg-white/10"
+              onClick={() => {
+                downloadEmployeesCsv(rows);
+                setOpen(false);
+              }}
+            >
+              .csv (UTF-8)
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------
 // Bulk-action bar — закреплена снизу, видна при N > 0

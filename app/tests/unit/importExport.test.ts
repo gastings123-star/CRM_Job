@@ -4,6 +4,7 @@ import {
   parseBackup,
   parseEmployeesXlsx,
   employeesToXlsxBytes,
+  employeesToCsv,
   employeeToRow,
 } from '@/infra/importExport';
 import { EmployeeSchema } from '@/data/schema';
@@ -92,5 +93,32 @@ describe('xlsx import/export', () => {
     expect(report.valid).toBe(1);
     expect(report.invalid).toBe(1);
     expect(report.rows[1]?.errors).toContain('Пустое ФИО');
+  });
+});
+
+describe('employeesToCsv', () => {
+  it('возвращает шапку и строку UTF-8 c BOM', () => {
+    const csv = employeesToCsv([emp({ fullName: 'Анна', role: 'QA' })]);
+    expect(csv.charCodeAt(0)).toBe(0xfeff); // BOM
+    const lines = csv.slice(1).split('\r\n');
+    expect(lines[0]).toContain('ФИО');
+    expect(lines[0]).toContain('Роль');
+    expect(lines[1]).toContain('Анна');
+    expect(lines[1]).toContain('QA');
+  });
+
+  it('эскейпит ;, кавычки и переносы строк', () => {
+    const csv = employeesToCsv([
+      emp({ fullName: 'Сидо; ров', role: 'Лид "ноль"' }),
+    ]);
+    const lines = csv.slice(1).split('\r\n');
+    // Поле «Сидо; ров» должно попасть в кавычки.
+    expect(lines[1]).toContain('"Сидо; ров"');
+    // «Лид "ноль"» → "Лид ""ноль"""
+    expect(lines[1]).toContain('"Лид ""ноль"""');
+  });
+
+  it('пустой массив → пустая строка', () => {
+    expect(employeesToCsv([])).toBe('');
   });
 });
