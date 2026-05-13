@@ -140,6 +140,45 @@ export function downloadEmployeesXlsx(employees: Employee[]): void {
 }
 
 // ---------------------------------------------------------------
+// CSV-экспорт сотрудников (тот же шейп, что и XLSX, разделитель — `;`)
+// ---------------------------------------------------------------
+
+function csvEscape(v: string | number | null | undefined): string {
+  if (v == null) return '';
+  const s = typeof v === 'string' ? v : String(v);
+  if (/[";\n\r]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+/** Сериализация employees в CSV-строку с заголовком (`;`-разделитель). */
+export function employeesToCsv(employees: Employee[]): string {
+  if (employees.length === 0) return '';
+  const rows = employees.map(employeeToRow);
+  const headers = Object.keys(rows[0]!);
+  const lines = [headers.map(csvEscape).join(';')];
+  for (const row of rows) {
+    lines.push(headers.map((h) => csvEscape(row[h])).join(';'));
+  }
+  // BOM (U+FEFF) — чтобы Excel под Windows корректно распознавал UTF-8.
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+export function downloadEmployeesCsv(employees: Employee[]): void {
+  const text = employeesToCsv(employees);
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `employees-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------
 // XLSX-импорт (dry-run отчёт)
 // ---------------------------------------------------------------
 
