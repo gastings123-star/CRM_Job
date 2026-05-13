@@ -73,6 +73,40 @@ export const DevelopmentItemSchema = z
   .passthrough();
 export type DevelopmentItem = z.infer<typeof DevelopmentItemSchema>;
 
+// ---------------------------------------------------------------
+// История проектов и команд
+// ---------------------------------------------------------------
+
+export const ProjectHistoryItemSchema = z
+  .object({
+    /** Название проекта. */
+    name: z.string().default(''),
+    /** Роль на проекте. */
+    role: z.string().default(''),
+    /** ISO-дата начала. */
+    from: z.string().default(''),
+    /** ISO-дата окончания (пусто — текущий). */
+    to: z.string().default(''),
+    /** Достижения / ключевой результат. */
+    achievements: z.string().default(''),
+  })
+  .passthrough();
+export type ProjectHistoryItem = z.infer<typeof ProjectHistoryItemSchema>;
+
+export const TeamHistoryItemSchema = z
+  .object({
+    /** ISO-дата смены команды. */
+    date: z.string().default(''),
+    /** Из какой команды. */
+    from: z.string().default(''),
+    /** В какую команду. */
+    to: z.string().default(''),
+    /** Комментарий / причина перехода. */
+    comment: z.string().default(''),
+  })
+  .passthrough();
+export type TeamHistoryItem = z.infer<typeof TeamHistoryItemSchema>;
+
 export const SkillSchema = z
   .object({
     name: z.string().default(''),
@@ -180,7 +214,7 @@ export const EmployeeSchema = z
     skills: z.array(SkillSchema).default([]),
     development: z.array(DevelopmentItemSchema).default([]),
     managerRating: ManagerRatingSchema.default({ score: 3, comment: '' }),
-    projectHistory: z.array(z.unknown()).default([]),
+    projectHistory: z.array(ProjectHistoryItemSchema).default([]),
     salaryHistory: z.array(z.unknown()).default([]),
     hobbies: z.string().default(''),
     managerComments: z.array(z.unknown()).default([]),
@@ -211,7 +245,7 @@ export const EmployeeSchema = z
         date: z.string().default(''),
       })
       .default({ score: 3, comment: '', date: '' }),
-    teamHistory: z.array(z.unknown()).default([]),
+    teamHistory: z.array(TeamHistoryItemSchema).default([]),
   })
   .passthrough();
 export type Employee = z.infer<typeof EmployeeSchema>;
