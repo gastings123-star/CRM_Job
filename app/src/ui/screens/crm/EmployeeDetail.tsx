@@ -7,6 +7,8 @@ import { Tabs, type TabItem } from '@/ui/components/Tabs';
 import { Button } from '@/ui/components/Button';
 import { BasicInfoTab } from './tabs/BasicInfoTab';
 import { LoadTab } from './tabs/LoadTab';
+import { SkillsTab } from './tabs/SkillsTab';
+import { GoalsTab } from './tabs/GoalsTab';
 
 /**
  * Экран `/crm/:id` — карточка одного сотрудника с табами.
@@ -18,12 +20,12 @@ import { LoadTab } from './tabs/LoadTab';
 const TABS: TabItem[] = [
   { id: 'basic', label: '1. Основная информация' },
   { id: 'load', label: '2. Загрузка' },
-  { id: 'skills', label: '3. Навыки', disabled: true },
+  { id: 'skills', label: '3. Навыки' },
   { id: 'projects', label: '4. История проектов', disabled: true },
   { id: 'extra', label: '5. Дополнительно', disabled: true },
   { id: 'tasks', label: '6. Задачи', disabled: true },
   { id: 'oneonone', label: '7. 1-on-1', disabled: true },
-  { id: 'goals', label: '8. Цели', disabled: true },
+  { id: 'goals', label: '8. Цели' },
 ];
 
 export function EmployeeDetailScreen(): JSX.Element {
@@ -71,6 +73,8 @@ export function EmployeeDetailScreen(): JSX.Element {
       <div role="tabpanel">
         {active === 'basic' && <BasicInfoTab employee={employee} />}
         {active === 'load' && <LoadTab employee={employee} />}
+        {active === 'skills' && <SkillsTab employee={employee} />}
+        {active === 'goals' && <GoalsTab employee={employee} />}
       </div>
     </div>
   );
