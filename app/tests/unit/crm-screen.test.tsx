@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import { LocationProvider } from 'preact-iso';
+import type { ComponentChildren } from 'preact';
 
 // supabase мочим в no-op, чтобы `loadAll()` не падал и не делал сети.
 vi.mock('@/infra/supabase', () => ({
@@ -15,6 +17,10 @@ import { CrmScreen } from '@/ui/screens/crm/CrmScreen';
 import { EmployeeForm } from '@/ui/screens/crm/EmployeeForm';
 import { confirmSignal, toastsSignal } from '@/state/ui';
 
+function Wrap({ children }: { children: ComponentChildren }): preact.JSX.Element {
+  return <LocationProvider>{children}</LocationProvider>;
+}
+
 afterEach(() => {
   employeesRepo.signal.value = [];
   toastsSignal.value = [];
@@ -28,7 +34,11 @@ afterEach(() => {
 
 describe('CrmScreen', () => {
   it('показывает empty-state, когда сотрудников нет', async () => {
-    render(<CrmScreen />);
+    render(
+      <Wrap>
+        <CrmScreen />
+      </Wrap>,
+    );
     expect(await screen.findByText(/пока ни одного сотрудника/i)).not.toBeNull();
   });
 
@@ -39,7 +49,11 @@ describe('CrmScreen', () => {
       { id: '1', fullName: 'Анна', role: 'QA', email: '', grade: 'Junior' } as never,
       { id: '2', fullName: 'Борис', role: 'Dev', email: '', grade: 'Middle' } as never,
     ];
-    render(<CrmScreen />);
+    render(
+      <Wrap>
+        <CrmScreen />
+      </Wrap>,
+    );
 
     expect(screen.queryByText('Анна')).not.toBeNull();
     expect(screen.queryByText('Борис')).not.toBeNull();
