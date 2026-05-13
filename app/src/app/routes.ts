@@ -21,6 +21,7 @@ function join(seg: string): string {
 export const routes = {
   dashboard: { path: join('/'), label: 'Дашборд' },
   crm: { path: join('/crm'), label: 'CRM' },
+  teams: { path: join('/teams'), label: 'Команды' },
   calendar: { path: join('/calendar'), label: 'Календарь' },
   development: { path: join('/development'), label: 'Развитие' },
   personal: { path: join('/personal'), label: 'Личное' },
@@ -41,6 +42,7 @@ export function employeeUrl(id: string): string {
 export const navItems: RouteKey[] = [
   'dashboard',
   'crm',
+  'teams',
   'calendar',
   'development',
   'personal',
