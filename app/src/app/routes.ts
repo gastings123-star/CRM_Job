@@ -30,6 +30,14 @@ export const routes = {
 
 export type RouteKey = keyof typeof routes;
 
+/** Шаблон детальной страницы сотрудника. Не в `routes`, т.к. не показывается в навигации. */
+export const employeeDetailPath = join('/crm/:id');
+
+/** Сборка ссылки на конкретного сотрудника. */
+export function employeeUrl(id: string): string {
+  return join('/crm/' + id);
+}
+
 export const navItems: RouteKey[] = [
   'dashboard',
   'crm',

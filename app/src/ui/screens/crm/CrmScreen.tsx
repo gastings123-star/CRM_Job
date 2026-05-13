@@ -1,7 +1,9 @@
 import type { JSX } from 'preact';
+import { useLocation } from 'preact-iso';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { EmployeeSchema, type Employee } from '@/data/schema';
 import { employeesRepo } from '@/infra/repos';
+import { employeeUrl } from '@/app/routes';
 import { Button } from '@/ui/components/Button';
 import { Modal } from '@/ui/components/Modal';
 import { TextInput } from '@/ui/components/Field';
@@ -15,6 +17,7 @@ import { EmployeeForm, type EmployeeFormValues } from './EmployeeForm';
  * работоспособным с локальным кэшем.
  */
 export function CrmScreen(): JSX.Element {
+  const loc = useLocation();
   const employees = employeesRepo.signal.value;
   const [query, setQuery] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -123,7 +126,8 @@ export function CrmScreen(): JSX.Element {
         <EmployeesTable
           rows={filtered}
           totalQuery={query}
-          onEdit={setEditing}
+          onOpen={(e) => loc.route(employeeUrl(e.id))}
+          onQuickEdit={setEditing}
           onDelete={(e) => void handleDelete(e)}
         />
       )}
@@ -178,11 +182,20 @@ function EmptyState({ onCreate }: { onCreate: () => void }): JSX.Element {
 interface EmployeesTableProps {
   rows: Employee[];
   totalQuery: string;
-  onEdit: (e: Employee) => void;
+  /** Открыть полную карточку сотрудника (/crm/:id). */
+  onOpen: (e: Employee) => void;
+  /** Быстрое редактирование в модалке (минимальный набор полей). */
+  onQuickEdit: (e: Employee) => void;
   onDelete: (e: Employee) => void;
 }
 
-function EmployeesTable({ rows, totalQuery, onEdit, onDelete }: EmployeesTableProps): JSX.Element {
+function EmployeesTable({
+  rows,
+  totalQuery,
+  onOpen,
+  onQuickEdit,
+  onDelete,
+}: EmployeesTableProps): JSX.Element {
   if (rows.length === 0) {
     return (
       <div class="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-slate-400">
@@ -210,7 +223,7 @@ function EmployeesTable({ rows, totalQuery, onEdit, onDelete }: EmployeesTablePr
                 <button
                   type="button"
                   class="text-left text-blue-300 hover:text-blue-200 hover:underline"
-                  onClick={() => onEdit(e)}
+                  onClick={() => onOpen(e)}
                 >
                   {e.fullName || <span class="text-slate-500">— без имени —</span>}
                 </button>
@@ -220,8 +233,11 @@ function EmployeesTable({ rows, totalQuery, onEdit, onDelete }: EmployeesTablePr
               <td class="px-4 py-2.5 text-slate-300">{e.hireDate || '—'}</td>
               <td class="px-4 py-2.5 text-slate-300">{e.email || '—'}</td>
               <td class="px-4 py-2.5 text-right">
-                <Button size="sm" variant="ghost" onClick={() => onEdit(e)}>
-                  Редактировать
+                <Button size="sm" variant="ghost" onClick={() => onOpen(e)}>
+                  Открыть
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => onQuickEdit(e)}>
+                  Правка
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => onDelete(e)}>
                   Удалить

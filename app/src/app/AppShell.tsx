@@ -4,9 +4,10 @@ import type { Session } from '@supabase/supabase-js';
 import { signOut } from '@/infra/auth';
 import { syncQueue, type SyncStatus } from '@/infra/sync';
 import { useEffect, useState } from 'preact/hooks';
-import { navItems, routes, type RouteKey } from './routes';
+import { employeeDetailPath, navItems, routes, type RouteKey } from './routes';
 import { Placeholder } from '@/ui/screens/Placeholder';
 import { CrmScreen } from '@/ui/screens/crm/CrmScreen';
+import { EmployeeDetailScreen } from '@/ui/screens/crm/EmployeeDetail';
 import { SettingsScreen } from '@/ui/screens/settings/SettingsScreen';
 import { ToastHost } from '@/ui/components/ToastHost';
 import { ConfirmDialogHost } from '@/ui/components/ConfirmDialogHost';
@@ -24,6 +25,7 @@ export function AppShell({ session }: { session: Session }): JSX.Element {
           <Router>
             <Route path={routes.dashboard.path} component={DashboardScreen} />
             <Route path={routes.crm.path} component={CrmScreen} />
+            <Route path={employeeDetailPath} component={EmployeeDetailScreen} />
             <Route path={routes.calendar.path} component={CalendarScreen} />
             <Route path={routes.development.path} component={DevelopmentScreen} />
             <Route path={routes.personal.path} component={PersonalScreen} />
