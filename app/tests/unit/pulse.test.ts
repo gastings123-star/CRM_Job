@@ -23,7 +23,7 @@ function snap(over: Partial<TeamPulseSnapshot>): TeamPulseSnapshot {
     escalationKind: null,
     note: '',
     ...over,
-  } as TeamPulseSnapshot;
+  };
 }
 
 describe('mondayOf', () => {
