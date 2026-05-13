@@ -40,6 +40,13 @@ export function employeeUrl(id: string): string {
   return join('/crm/' + id);
 }
 
+/** Шаблон страницы команды. Тоже не в навигации (показывается из /teams). */
+export const teamDetailPath = join('/teams/:id');
+
+export function teamUrl(id: string): string {
+  return join('/teams/' + id);
+}
+
 export const navItems: RouteKey[] = [
   'dashboard',
   'crm',

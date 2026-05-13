@@ -1,11 +1,14 @@
 import type { JSX } from 'preact';
+import { useLocation } from 'preact-iso';
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { employeesRepo, teamsRepo } from '@/infra/repos';
-import { TeamSchema, type Team } from '@/data/schema';
+import { employeesRepo, pulseRepo, teamsRepo } from '@/infra/repos';
+import { TeamSchema, type PulseStatus, type Team, type TeamPulseSnapshot } from '@/data/schema';
+import { teamUrl } from '@/app/routes';
 import { Button } from '@/ui/components/Button';
 import { Modal } from '@/ui/components/Modal';
 import { Field, TextInput } from '@/ui/components/Field';
 import { confirm, toast } from '@/state/ui';
+import { currentStreak, snapshotsForTeam } from '@/domain/pulse';
 
 /**
  * Экран `/teams` — справочник команд / стримов.
@@ -32,8 +35,10 @@ const PRESET_COLORS = [
 ];
 
 export function TeamsScreen(): JSX.Element {
+  const loc = useLocation();
   const teams = teamsRepo.signal.value;
   const employees = employeesRepo.signal.value;
+  const allPulse = pulseRepo.signal.value;
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Team | null>(null);
   const [query, setQuery] = useState('');
@@ -44,6 +49,7 @@ export function TeamsScreen(): JSX.Element {
       toast.error(`Не удалось загрузить команды: ${e instanceof Error ? e.message : String(e)}`);
     });
     employeesRepo.loadAll().catch(() => undefined);
+    pulseRepo.loadAll().catch(() => undefined);
   }, []);
 
   const counts = useMemo(() => {
@@ -140,6 +146,7 @@ export function TeamsScreen(): JSX.Element {
               <tr>
                 <th class="px-4 py-3 font-medium">Цвет</th>
                 <th class="px-4 py-3 font-medium">Название</th>
+                <th class="px-4 py-3 font-medium">Пульс</th>
                 <th class="px-4 py-3 font-medium">Сотрудников</th>
                 <th class="px-4 py-3 text-right font-medium">Действия</th>
               </tr>
@@ -158,13 +165,20 @@ export function TeamsScreen(): JSX.Element {
                     <button
                       type="button"
                       class="text-left text-blue-300 hover:text-blue-200 hover:underline"
-                      onClick={() => setEditing(t)}
+                      onClick={() => loc.route(teamUrl(t.id))}
+                      title="Открыть карточку команды"
                     >
                       {t.name}
                     </button>
                   </td>
+                  <td class="px-4 py-2.5">
+                    <PulseChip teamId={t.id} all={allPulse} />
+                  </td>
                   <td class="px-4 py-2.5 text-slate-300">{counts.get(t.name) ?? 0}</td>
                   <td class="px-4 py-2.5 text-right">
+                    <Button size="sm" variant="ghost" onClick={() => loc.route(teamUrl(t.id))}>
+                      Открыть
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditing(t)}>
                       Правка
                     </Button>
@@ -291,5 +305,35 @@ function TeamForm({
         <Button type="submit">{submitLabel}</Button>
       </div>
     </form>
+  );
+}
+
+// ---------------------------------------------------------------
+// Мини-индикатор пульса (для строки таблицы команд)
+// ---------------------------------------------------------------
+
+const STATUS_DOT: Record<PulseStatus, string> = {
+  green: 'bg-emerald-400',
+  yellow: 'bg-amber-400',
+  red: 'bg-red-400',
+};
+
+function PulseChip({
+  teamId,
+  all,
+}: {
+  teamId: string;
+  all: TeamPulseSnapshot[];
+}): JSX.Element {
+  const sorted = snapshotsForTeam(all, teamId);
+  const streak = currentStreak(sorted);
+  if (streak.status === null) {
+    return <span class="text-xs text-slate-500">—</span>;
+  }
+  return (
+    <span class="inline-flex items-center gap-1.5 text-xs text-slate-300">
+      <span class={`inline-block h-2 w-2 rounded-full ${STATUS_DOT[streak.status]}`} />
+      {streak.weeks}w
+    </span>
   );
 }

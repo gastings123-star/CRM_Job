@@ -7,3 +7,4 @@ export { employeesRepo } from './employees';
 export { teamsRepo } from './teams';
 export { projectsRepo } from './projects';
 export { personalRepo } from './personal';
+export { pulseRepo } from './pulse';
