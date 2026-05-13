@@ -9,6 +9,7 @@ import { Placeholder } from '@/ui/screens/Placeholder';
 import { CrmScreen } from '@/ui/screens/crm/CrmScreen';
 import { EmployeeDetailScreen } from '@/ui/screens/crm/EmployeeDetail';
 import { SettingsScreen } from '@/ui/screens/settings/SettingsScreen';
+import { DashboardScreen } from '@/ui/screens/dashboard/DashboardScreen';
 import { ToastHost } from '@/ui/components/ToastHost';
 import { ConfirmDialogHost } from '@/ui/components/ConfirmDialogHost';
 
@@ -131,9 +132,6 @@ function SyncBadge({ status }: { status: SyncStatus }): JSX.Element {
 // Экраны-заглушки
 // ---------------------------------------------------------------
 
-function DashboardScreen(): JSX.Element {
-  return <Placeholder title="Дашборд" />;
-}
 function CalendarScreen(): JSX.Element {
   return <Placeholder title="Календарь" />;
 }
