@@ -137,7 +137,7 @@ describe('CrmScreen bulk actions', () => {
     fireEvent.click(screen.getByRole('button', { name: /грейд…/i }));
     // Выбираем Senior в селекте модалки
     const selects = document.querySelectorAll('select');
-    const gradeSelect = selects[selects.length - 1] as HTMLSelectElement;
+    const gradeSelect = selects[selects.length - 1]!;
     fireEvent.change(gradeSelect, { target: { value: 'Senior' } });
     fireEvent.click(screen.getByRole('button', { name: /применить/i }));
     await waitFor(() => {

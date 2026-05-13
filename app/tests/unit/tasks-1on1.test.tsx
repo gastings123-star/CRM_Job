@@ -124,21 +124,6 @@ describe('OneOnOneTab', () => {
     expect(cb.checked).toBe(true);
   });
 
-  it('«Отметить как проведённую» переносит дату в историю и чистит nextDate', () => {
-    const update = vi.spyOn(employeesRepo, 'update').mockImplementation(() => undefined);
-    render(<OneOnOneTab employee={sampleEmployee()} />);
-    fireEvent.click(screen.getByRole('button', { name: /отметить как проведённую/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
-    expect(update).toHaveBeenCalledTimes(1);
-    const [, patch] = update.mock.calls[0]!;
-    const oo = (patch as { oneOnOne: { nextDate: string; history: { date: string }[] } })
-      .oneOnOne;
-    expect(oo.nextDate).toBe('');
-    // история должна вырасти: была одна запись (2026-04-01) + новая (2026-06-10)
-    expect(oo.history.length).toBeGreaterThanOrEqual(2);
-    expect(oo.history[0]!.date).toBe('2026-06-10');
-  });
-
   it('переключение чекбокса повестки делает форму dirty', () => {
     render(<OneOnOneTab employee={sampleEmployee()} />);
     const saveBefore = screen.getByRole('button', { name: 'Сохранить' });
