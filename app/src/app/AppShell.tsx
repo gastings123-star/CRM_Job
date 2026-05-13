@@ -14,6 +14,7 @@ import { TeamsScreen } from '@/ui/screens/teams/TeamsScreen';
 import { ProjectsScreen } from '@/ui/screens/projects/ProjectsScreen';
 import { CalendarScreen } from '@/ui/screens/calendar/CalendarScreen';
 import { DevelopmentScreen } from '@/ui/screens/development/DevelopmentScreen';
+import { PersonalScreen } from '@/ui/screens/personal/PersonalScreen';
 import { ToastHost } from '@/ui/components/ToastHost';
 import { ConfirmDialogHost } from '@/ui/components/ConfirmDialogHost';
 
@@ -137,9 +138,6 @@ function SyncBadge({ status }: { status: SyncStatus }): JSX.Element {
 // Экраны-заглушки
 // ---------------------------------------------------------------
 
-function PersonalScreen(): JSX.Element {
-  return <Placeholder title="Личное" />;
-}
 function NotFoundScreen(): JSX.Element {
   return <Placeholder title="404" description="Такой страницы нет." />;
 }
