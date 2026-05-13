@@ -4,13 +4,14 @@ import type { Session } from '@supabase/supabase-js';
 import { signOut } from '@/infra/auth';
 import { syncQueue, type SyncStatus } from '@/infra/sync';
 import { useEffect, useState } from 'preact/hooks';
-import { employeeDetailPath, navItems, routes, type RouteKey } from './routes';
+import { employeeDetailPath, navItems, routes, teamDetailPath, type RouteKey } from './routes';
 import { Placeholder } from '@/ui/screens/Placeholder';
 import { CrmScreen } from '@/ui/screens/crm/CrmScreen';
 import { EmployeeDetailScreen } from '@/ui/screens/crm/EmployeeDetail';
 import { SettingsScreen } from '@/ui/screens/settings/SettingsScreen';
 import { DashboardScreen } from '@/ui/screens/dashboard/DashboardScreen';
 import { TeamsScreen } from '@/ui/screens/teams/TeamsScreen';
+import { TeamDetailScreen } from '@/ui/screens/teams/TeamDetailScreen';
 import { ProjectsScreen } from '@/ui/screens/projects/ProjectsScreen';
 import { TasksScreen } from '@/ui/screens/tasks/TasksScreen';
 import { CalendarScreen } from '@/ui/screens/calendar/CalendarScreen';
@@ -36,6 +37,7 @@ export function AppShell({ session }: { session: Session }): JSX.Element {
             <Route path={routes.crm.path} component={CrmScreen} />
             <Route path={employeeDetailPath} component={EmployeeDetailScreen} />
             <Route path={routes.teams.path} component={TeamsScreen} />
+            <Route path={teamDetailPath} component={TeamDetailScreen} />
             <Route path={routes.tasks.path} component={TasksScreen} />
             <Route path={routes.calendar.path} component={CalendarScreen} />
             <Route path={routes.development.path} component={DevelopmentScreen} />

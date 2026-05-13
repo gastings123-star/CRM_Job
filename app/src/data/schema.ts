@@ -280,6 +280,36 @@ export const PersonalSchema = z.object({}).passthrough();
 export type Personal = z.infer<typeof PersonalSchema>;
 
 // ---------------------------------------------------------------
+// Пульс команд — еженедельный снэпшот
+// ---------------------------------------------------------------
+
+export const PulseStatus = z.enum(['green', 'yellow', 'red']);
+export type PulseStatus = z.infer<typeof PulseStatus>;
+
+export const PulseEscalationKind = z.enum(['decision', 'resource', 'communication']);
+export type PulseEscalationKind = z.infer<typeof PulseEscalationKind>;
+
+export const TeamPulseSnapshotSchema = z
+  .object({
+    id: z.string(),
+    /** `Team.id` соответствующей команды. */
+    teamId: z.string(),
+    /** ISO-дата понедельника недели, например `2026-05-11`. */
+    weekStart: z.string(),
+    status: PulseStatus.default('green'),
+    /** 0..10 — субъективная плотность хвостов. */
+    tailIndex: z.number().min(0).max(10).default(0),
+    /** Сколько эскалаций было за неделю (счётчик). */
+    escalations: z.number().min(0).default(0),
+    /** Тип «главной» эскалации, опционально. */
+    escalationKind: PulseEscalationKind.nullable().default(null),
+    /** Одна строка свободного текста — что важного на этой неделе. */
+    note: z.string().default(''),
+  })
+  .passthrough();
+export type TeamPulseSnapshot = z.infer<typeof TeamPulseSnapshotSchema>;
+
+// ---------------------------------------------------------------
 // Версия схемы (для миграций localStorage / JSON-бэкапов)
 // ---------------------------------------------------------------
 
