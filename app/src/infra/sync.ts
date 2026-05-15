@@ -19,7 +19,13 @@
  */
 import { supabase } from './supabase';
 
-export type SyncTable = 'employees' | 'teams' | 'projects' | 'personal' | 'team_pulse';
+export type SyncTable =
+  | 'employees'
+  | 'teams'
+  | 'projects'
+  | 'personal'
+  | 'team_pulse'
+  | 'team_feedback';
 
 export type SyncKind = 'insert' | 'update' | 'delete' | 'upsert';
 
