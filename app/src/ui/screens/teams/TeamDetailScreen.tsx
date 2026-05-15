@@ -1,7 +1,7 @@
 import type { JSX } from 'preact';
 import { useLocation, useRoute } from 'preact-iso';
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { employeesRepo, pulseRepo, teamsRepo } from '@/infra/repos';
+import { employeesRepo, feedbackRepo, pulseRepo, teamsRepo } from '@/infra/repos';
 import { routes } from '@/app/routes';
 import { Button } from '@/ui/components/Button';
 import { toast } from '@/state/ui';
@@ -16,8 +16,23 @@ import {
   tailSlope,
   findSnapshot,
 } from '@/domain/pulse';
-import type { PulseStatus, TeamPulseSnapshot } from '@/data/schema';
+import {
+  feedbackForTeam,
+  feedbackToJson,
+  feedbackToMarkdown,
+  filterBySource,
+  MOOD_GLYPH,
+  MOOD_LABEL,
+  SOURCE_LABEL,
+} from '@/domain/feedback';
+import type {
+  FeedbackSource,
+  PulseStatus,
+  TeamFeedback,
+  TeamPulseSnapshot,
+} from '@/data/schema';
 import { PulseSnapshotModal } from './PulseSnapshotModal';
+import { FeedbackModal } from './FeedbackModal';
 
 /**
  * `/teams/:id` — карточка команды с разделом «Пульс».
@@ -52,12 +67,17 @@ export function TeamDetailScreen(): JSX.Element {
   const teams = teamsRepo.signal.value;
   const employees = employeesRepo.signal.value;
   const allPulse = pulseRepo.signal.value;
+  const allFeedback = feedbackRepo.signal.value;
   const now = useMemo(() => new Date(), []);
   const [editWeek, setEditWeek] = useState<string | null>(null);
+  const [editFeedback, setEditFeedback] = useState<TeamFeedback | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackSource, setFeedbackSource] = useState<'all' | FeedbackSource>('all');
 
   useEffect(() => {
     teamsRepo.loadAll().catch((e: unknown) => toast.error(toMsg(e)));
     pulseRepo.loadAll().catch((e: unknown) => toast.error(toMsg(e)));
+    feedbackRepo.loadAll().catch(() => undefined);
     employeesRepo.loadAll().catch(() => undefined);
   }, []);
 
@@ -177,6 +197,21 @@ export function TeamDetailScreen(): JSX.Element {
         )}
       </section>
 
+      <FeedbackSection
+        team={team}
+        all={allFeedback}
+        source={feedbackSource}
+        onSourceChange={setFeedbackSource}
+        onAdd={() => {
+          setEditFeedback(null);
+          setFeedbackOpen(true);
+        }}
+        onOpen={(f) => {
+          setEditFeedback(f);
+          setFeedbackOpen(true);
+        }}
+      />
+
       <PulseSnapshotModal
         open={editWeek !== null}
         weekStart={editWeek ?? currentMonday}
@@ -190,8 +225,186 @@ export function TeamDetailScreen(): JSX.Element {
         }
         onClose={() => setEditWeek(null)}
       />
+
+      <FeedbackModal
+        open={feedbackOpen}
+        teamId={teamId}
+        teamName={team.name}
+        existing={editFeedback ?? undefined}
+        onClose={() => {
+          setFeedbackOpen(false);
+          setEditFeedback(null);
+        }}
+      />
     </div>
   );
+}
+
+// ---------------------------------------------------------------
+// Секция «Обратная связь» — фильтр по источнику, список, экспорт
+// ---------------------------------------------------------------
+
+function FeedbackSection({
+  team,
+  all,
+  source,
+  onSourceChange,
+  onAdd,
+  onOpen,
+}: {
+  team: { id: string; name: string; color: string };
+  all: TeamFeedback[];
+  source: 'all' | FeedbackSource;
+  onSourceChange: (v: 'all' | FeedbackSource) => void;
+  onAdd: () => void;
+  onOpen: (f: TeamFeedback) => void;
+}): JSX.Element {
+  const list = feedbackForTeam(all, team.id);
+  const filtered = filterBySource(list, source);
+
+  function exportMarkdown(): void {
+    const md = feedbackToMarkdown(team, list);
+    downloadText(md, `feedback-${team.name}-${todayIso()}.md`, 'text/markdown');
+    toast.info(`Экспортирован Markdown · ${list.length} записей`);
+  }
+  function exportJson(): void {
+    const json = feedbackToJson(team, list);
+    downloadText(json, `feedback-${team.name}-${todayIso()}.json`, 'application/json');
+    toast.info(`Экспортирован JSON · ${list.length} записей`);
+  }
+
+  return (
+    <section class="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-5">
+      <header class="flex flex-wrap items-center gap-3">
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">
+          Обратная связь
+        </h3>
+        <span class="text-xs text-slate-500">{list.length} записей</span>
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+          <SourceFilter value={source} onChange={onSourceChange} list={list} />
+          <Button variant="secondary" size="sm" onClick={exportMarkdown} disabled={list.length === 0}>
+            .md
+          </Button>
+          <Button variant="secondary" size="sm" onClick={exportJson} disabled={list.length === 0}>
+            .json
+          </Button>
+          <Button size="sm" onClick={onAdd}>
+            + Запись
+          </Button>
+        </div>
+      </header>
+
+      {filtered.length === 0 ? (
+        <p class="text-sm text-slate-500">
+          {list.length === 0
+            ? 'Записей пока нет. Нажмите «+ Запись» после очередного синхрона с DPO.'
+            : 'В этом фильтре пусто.'}
+        </p>
+      ) : (
+        <ul class="space-y-2">
+          {filtered.map((f) => (
+            <FeedbackRow key={f.id} item={f} onOpen={() => onOpen(f)} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function SourceFilter({
+  value,
+  onChange,
+  list,
+}: {
+  value: 'all' | FeedbackSource;
+  onChange: (v: 'all' | FeedbackSource) => void;
+  list: TeamFeedback[];
+}): JSX.Element {
+  const counts = {
+    all: list.length,
+    dpo: list.filter((f) => f.source === 'dpo').length,
+    lead: list.filter((f) => f.source === 'lead').length,
+    peer: list.filter((f) => f.source === 'peer').length,
+    self: list.filter((f) => f.source === 'self').length,
+  };
+  const items: { id: 'all' | FeedbackSource; label: string }[] = [
+    { id: 'all', label: 'Все' },
+    { id: 'dpo', label: SOURCE_LABEL.dpo },
+    { id: 'lead', label: SOURCE_LABEL.lead },
+    { id: 'peer', label: SOURCE_LABEL.peer },
+    { id: 'self', label: SOURCE_LABEL.self },
+  ];
+  return (
+    <div class="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-1 text-xs">
+      {items.map((it) => (
+        <button
+          key={it.id}
+          type="button"
+          onClick={() => onChange(it.id)}
+          class={`rounded px-2 py-1 transition-colors ${
+            value === it.id ? 'bg-white/10 text-slate-100' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          {it.label} <span class="ml-1 tabular-nums text-slate-500">{counts[it.id]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function FeedbackRow({
+  item,
+  onOpen,
+}: {
+  item: TeamFeedback;
+  onOpen: () => void;
+}): JSX.Element {
+  const openItems = item.actionItems.filter((a) => !a.done).length;
+  return (
+    <li class="rounded-lg bg-white/5 px-3 py-2.5">
+      <header class="flex flex-wrap items-baseline gap-2 text-sm">
+        <span class="tabular-nums text-slate-300">{item.date}</span>
+        <span class="rounded bg-white/5 px-1.5 py-0.5 text-xs uppercase text-slate-300">
+          {SOURCE_LABEL[item.source]}
+        </span>
+        {item.author && <span class="text-xs text-slate-400">{item.author}</span>}
+        <span class="text-xs">
+          {MOOD_GLYPH[item.mood]} {MOOD_LABEL[item.mood]}
+        </span>
+        {item.themes.length > 0 && (
+          <span class="text-xs text-slate-500">· {item.themes.join(', ')}</span>
+        )}
+        <Button variant="ghost" size="sm" onClick={onOpen} class="ml-auto">
+          Открыть
+        </Button>
+      </header>
+      {item.note && (
+        <p class="mt-1 line-clamp-2 text-sm text-slate-300">{item.note}</p>
+      )}
+      {item.actionItems.length > 0 && (
+        <p class="mt-1 text-xs text-slate-500">
+          Action items: {item.actionItems.length} · открытых {openItems}
+        </p>
+      )}
+    </li>
+  );
+}
+
+function downloadText(text: string, filename: string, mime: string): void {
+  const blob = new Blob([text], { type: `${mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 // ---------------------------------------------------------------

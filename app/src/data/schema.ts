@@ -289,6 +289,52 @@ export type PulseStatus = z.infer<typeof PulseStatus>;
 export const PulseEscalationKind = z.enum(['decision', 'resource', 'communication']);
 export type PulseEscalationKind = z.infer<typeof PulseEscalationKind>;
 
+// ---------------------------------------------------------------
+// Обратная связь о команде (DPO / лид / peer / self)
+// ---------------------------------------------------------------
+
+export const FeedbackSource = z.enum(['dpo', 'lead', 'peer', 'self']);
+export type FeedbackSource = z.infer<typeof FeedbackSource>;
+
+export const FeedbackMood = z.enum(['positive', 'neutral', 'concern']);
+export type FeedbackMood = z.infer<typeof FeedbackMood>;
+
+export const FeedbackActionItemSchema = z
+  .object({
+    id: z.string(),
+    text: z.string().default(''),
+    done: z.boolean().default(false),
+    /** ISO-дата, опциональна. Пустая строка = без дедлайна. */
+    due: z.string().default(''),
+  })
+  .passthrough();
+export type FeedbackActionItem = z.infer<typeof FeedbackActionItemSchema>;
+
+export const TeamFeedbackSchema = z
+  .object({
+    id: z.string(),
+    /** `Team.id` соответствующей команды. */
+    teamId: z.string(),
+    /** ISO-дата встречи / получения обратной связи. */
+    date: z.string(),
+    source: FeedbackSource,
+    /** Имя автора feedback (например, ФИО DPO). Может быть пустой строкой. */
+    author: z.string().default(''),
+    mood: FeedbackMood.default('neutral'),
+    /** Свободные теги: «ресурсы», «процессы», ... */
+    themes: z.array(z.string()).default([]),
+    /** Длинный текст — резюме встречи. */
+    note: z.string().default(''),
+    /** Action items — мои обязательства из этой встречи. */
+    actionItems: z.array(FeedbackActionItemSchema).default([]),
+  })
+  .passthrough();
+export type TeamFeedback = z.infer<typeof TeamFeedbackSchema>;
+
+// ---------------------------------------------------------------
+// Пульс команд — еженедельный снэпшот (см. miграцию 2026-05-13-team-pulse.sql)
+// ---------------------------------------------------------------
+
 export const TeamPulseSnapshotSchema = z
   .object({
     id: z.string(),
