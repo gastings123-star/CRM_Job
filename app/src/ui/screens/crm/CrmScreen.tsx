@@ -57,6 +57,8 @@ export function CrmScreen(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [sort, setSort] = useState<SortState | null>({ key: 'fullName', dir: 'asc' });
   const [activeList, setActiveList] = useState<SmartListId>('all');
+  /** Фильтр по команде; '' = все, '__none__' = «без команды». */
+  const [teamFilter, setTeamFilter] = useState<string>('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<null | 'team' | 'grade' | 'promotion'>(null);
 
@@ -82,6 +84,8 @@ export function CrmScreen(): JSX.Element {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    // teams нужны для select-фильтра «команда» в шапке.
+    teamsRepo.loadAll().catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -89,7 +93,13 @@ export function CrmScreen(): JSX.Element {
 
   const filtered = useMemo(() => {
     const list = SMART_LISTS.find((l) => l.id === activeList) ?? SMART_LISTS[0]!;
-    const byList = employees.filter((e) => list.predicate(e, now));
+    let byList = employees.filter((e) => list.predicate(e, now));
+    // Фильтр по команде (имя из teamsRepo либо «без команды»).
+    if (teamFilter === '__none__') {
+      byList = byList.filter((e) => !e.team);
+    } else if (teamFilter) {
+      byList = byList.filter((e) => e.team === teamFilter);
+    }
     const q = query.trim().toLowerCase();
     const base =
       q === ''
@@ -105,7 +115,7 @@ export function CrmScreen(): JSX.Element {
     const dir = sort.dir === 'asc' ? 1 : -1;
     const cmp = compareBy(sort.key, now);
     return [...base].sort((a, b) => cmp(a, b) * dir);
-  }, [employees, query, sort, activeList, now]);
+  }, [employees, query, sort, activeList, teamFilter, now]);
 
   // Синхронизируем «видимую ленту» в глобальном сигнале — для prev/next.
   useEffect(() => {
@@ -244,12 +254,19 @@ export function CrmScreen(): JSX.Element {
         </div>
       </header>
 
-      <SmartListBar
-        employees={employees}
-        active={activeList}
-        onChange={setActiveList}
-        now={now}
-      />
+      <div class="flex flex-wrap items-center gap-3">
+        <SmartListBar
+          employees={employees}
+          active={activeList}
+          onChange={setActiveList}
+          now={now}
+        />
+        <TeamFilter
+          employees={employees}
+          value={teamFilter}
+          onChange={setTeamFilter}
+        />
+      </div>
 
       {loading && employees.length === 0 ? (
         <div class="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-slate-400">
@@ -362,6 +379,64 @@ function SmartListBar({
         );
       })}
     </nav>
+  );
+}
+
+// ---------------------------------------------------------------
+// Фильтр по команде (компактный dropdown, рядом со smart-listами)
+// ---------------------------------------------------------------
+
+function TeamFilter({
+  employees,
+  value,
+  onChange,
+}: {
+  employees: Employee[];
+  value: string; // '' = все, '__none__' = без команды, иначе — имя команды
+  onChange: (v: string) => void;
+}): JSX.Element {
+  // Берём команды по факту из имён, чтобы не зависеть от того, что
+  // teamsRepo ещё не загрузился. Плюс «Без команды», если такие есть.
+  const teams = useMemo(() => {
+    const m = new Map<string, number>();
+    let none = 0;
+    for (const e of employees) {
+      if (e.team) m.set(e.team, (m.get(e.team) ?? 0) + 1);
+      else none += 1;
+    }
+    return {
+      none,
+      items: [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+    };
+  }, [employees]);
+
+  const label =
+    value === '' ? 'Все команды' : value === '__none__' ? 'Без команды' : value;
+
+  return (
+    <label class="inline-flex items-center gap-2 text-xs text-slate-300">
+      <span class="text-slate-500">Команда:</span>
+      <div class="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.currentTarget.value)}
+          class="appearance-none rounded-full border border-white/10 bg-white/5 px-3 py-1 pr-7 text-xs text-slate-100 transition-colors hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+          aria-label="Фильтр по команде"
+          title={label}
+        >
+          <option value="">Все команды · {employees.length}</option>
+          {teams.none > 0 && (
+            <option value="__none__">Без команды · {teams.none}</option>
+          )}
+          {teams.items.map(([name, n]) => (
+            <option key={name} value={name}>
+              {name} · {n}
+            </option>
+          ))}
+        </select>
+        <span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">▾</span>
+      </div>
+    </label>
   );
 }
 
