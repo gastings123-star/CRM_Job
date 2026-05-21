@@ -153,6 +153,27 @@ export const OneOnOneHistoryItemSchema = z
   .passthrough();
 export type OneOnOneHistoryItem = z.infer<typeof OneOnOneHistoryItemSchema>;
 
+// ---------------------------------------------------------------
+// Заметки о сотруднике (попадают в `Employee.managerComments`)
+// ---------------------------------------------------------------
+
+export const EmployeeNoteTone = z.enum(['positive', 'neutral', 'concern']);
+export type EmployeeNoteTone = z.infer<typeof EmployeeNoteTone>;
+
+export const EmployeeNoteSchema = z
+  .object({
+    id: z.string(),
+    /** ISO-дата когда заметка зафиксирована. */
+    date: z.string().default(''),
+    tone: EmployeeNoteTone.default('neutral'),
+    /** От кого приходит заметка: ФИО коллеги/лида, либо «от себя». */
+    from: z.string().default(''),
+    /** Сам текст заметки. */
+    text: z.string().default(''),
+  })
+  .passthrough();
+export type EmployeeNote = z.infer<typeof EmployeeNoteSchema>;
+
 export const AgendaChecklistSchema = z.object({
   feedback: z.boolean().default(false),
   goals: z.boolean().default(false),
@@ -217,7 +238,9 @@ export const EmployeeSchema = z
     projectHistory: z.array(ProjectHistoryItemSchema).default([]),
     salaryHistory: z.array(z.unknown()).default([]),
     hobbies: z.string().default(''),
-    managerComments: z.array(z.unknown()).default([]),
+    // .catch([]) — на случай legacy-данных не той формы:
+    // лучше пустой массив, чем выкинуть всю запись сотрудника.
+    managerComments: z.array(EmployeeNoteSchema).catch([]).default([]),
     documents: z.array(z.unknown()).default([]),
     risk: RiskSchema.default({ level: 'низкий', comment: '' }),
     promotionReadiness: PromotionReadiness.default('не готов'),

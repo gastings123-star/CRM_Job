@@ -14,6 +14,7 @@ import { TasksTab } from './tabs/TasksTab';
 import { OneOnOneTab } from './tabs/OneOnOneTab';
 import { ProjectHistoryTab } from './tabs/ProjectHistoryTab';
 import { ExtraTab } from './tabs/ExtraTab';
+import { NotesTab } from './tabs/NotesTab';
 
 /**
  * Экран `/crm/:id` — карточка одного сотрудника с табами.
@@ -31,6 +32,7 @@ const TABS: TabItem[] = [
   { id: 'tasks', label: '6. Задачи' },
   { id: 'oneonone', label: '7. 1-on-1' },
   { id: 'goals', label: '8. Цели' },
+  { id: 'notes', label: '9. Заметки' },
 ];
 
 export function EmployeeDetailScreen(): JSX.Element {
@@ -74,9 +76,12 @@ export function EmployeeDetailScreen(): JSX.Element {
         </Button>
         <Avatar name={employee.fullName} />
         <div class="min-w-0 flex-1">
-          <h2 class="text-2xl font-semibold leading-tight truncate">
-            {employee.fullName || <span class="text-slate-500">— без имени —</span>}
-          </h2>
+          <div class="flex flex-wrap items-baseline gap-2">
+            <h2 class="text-2xl font-semibold leading-tight truncate">
+              {employee.fullName || <span class="text-slate-500">— без имени —</span>}
+            </h2>
+            <NotesBadge notes={employee.managerComments ?? []} onJump={() => setActive('notes')} />
+          </div>
           <p class="text-sm text-slate-400 truncate">
             {[employee.role, employee.team || 'без команды', employee.grade]
               .filter(Boolean)
@@ -123,6 +128,7 @@ export function EmployeeDetailScreen(): JSX.Element {
         {active === 'tasks' && <TasksTab employee={employee} />}
         {active === 'oneonone' && <OneOnOneTab employee={employee} />}
         {active === 'goals' && <GoalsTab employee={employee} />}
+        {active === 'notes' && <NotesTab employee={employee} />}
       </div>
     </div>
   );
@@ -157,5 +163,34 @@ function Avatar({ name }: { name: string }): JSX.Element {
     >
       {initials || '?'}
     </div>
+  );
+}
+
+function NotesBadge({
+  notes,
+  onJump,
+}: {
+  notes: { tone: string }[];
+  onJump: () => void;
+}): preact.JSX.Element | null {
+  if (notes.length === 0) return null;
+  const concern = notes.filter((n) => n.tone === 'concern').length;
+  const positive = notes.filter((n) => n.tone === 'positive').length;
+  return (
+    <button
+      type="button"
+      onClick={onJump}
+      title="Открыть вкладку «Заметки»"
+      class={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-colors hover:bg-white/10 ${
+        concern > 0
+          ? 'bg-red-500/15 text-red-200'
+          : positive > 0
+            ? 'bg-emerald-500/15 text-emerald-200'
+            : 'bg-white/5 text-slate-300'
+      }`}
+    >
+      📝 {notes.length}
+      {concern > 0 && <span class="text-red-300">· 🔴 {concern}</span>}
+    </button>
   );
 }
