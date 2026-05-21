@@ -3,6 +3,7 @@ import {
   currentStreak,
   escalationsWindow,
   findSnapshot,
+  maxTailIndex,
   mondayOf,
   recentWeeks,
   snapshotsForTeam,
@@ -133,6 +134,40 @@ describe('sparklinePath', () => {
   });
   it('пустые точки → пустая строка', () => {
     expect(sparklinePath([{ weekStart: 'a', value: null, status: null }], 100, 50)).toBe('');
+  });
+});
+
+describe('maxTailIndex', () => {
+  it('возвращает максимум по непустым точкам', () => {
+    expect(
+      maxTailIndex([
+        { weekStart: 'a', value: 3, status: null },
+        { weekStart: 'b', value: 42, status: null },
+        { weekStart: 'c', value: null, status: null },
+        { weekStart: 'd', value: 7, status: null },
+      ]),
+    ).toBe(42);
+  });
+  it('на пустых/нулевых рядах → 1, не делим на ноль', () => {
+    expect(maxTailIndex([])).toBe(1);
+    expect(
+      maxTailIndex([
+        { weekStart: 'a', value: 0, status: null },
+        { weekStart: 'b', value: null, status: null },
+      ]),
+    ).toBe(1);
+  });
+});
+
+describe('sparklinePath со scaleMax', () => {
+  it('значения > 10 нормально вписываются (не клиппятся)', () => {
+    const pts = [
+      { weekStart: 'a', value: 0, status: 'green' as const },
+      { weekStart: 'b', value: 50, status: 'red' as const },
+    ];
+    const d = sparklinePath(pts, 100, 50, 50);
+    // точка с value=50 должна быть на верхней границе (y=0)
+    expect(d).toContain('L 100.0 0.0');
   });
 });
 

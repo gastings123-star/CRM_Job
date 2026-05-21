@@ -98,6 +98,13 @@ export function PulseReportScreen(): JSX.Element {
   // Шкала-разделители по месяцам — рисуем подпись только когда месяц меняется.
   const weekLabels = useMemo(() => weeks.map((w) => labelOfWeek(w)), [weeks]);
 
+  // Global max tailIndex по всему окну — для нормализации opacity в ячейках.
+  const tailMax = useMemo(() => {
+    let m = 0;
+    for (const r of rows) for (const c of r.cells) if (c && c.tailIndex > m) m = c.tailIndex;
+    return m > 0 ? m : 1;
+  }, [rows]);
+
   const totals = useMemo(() => {
     let red = 0;
     let yellow = 0;
@@ -205,7 +212,7 @@ export function PulseReportScreen(): JSX.Element {
                     key={`${team.id}-${weeks[i]}`}
                     class={`p-0 ${weekLabels[i]?.isMonthStart ? 'border-l border-white/10' : ''}`}
                   >
-                    <Cell snap={c} onOpen={() => loc.route(teamUrl(team.id))} weekStart={weeks[i] ?? ''} />
+                    <Cell snap={c} onOpen={() => loc.route(teamUrl(team.id))} weekStart={weeks[i] ?? ''} tailMax={tailMax} />
                   </td>
                 ))}
                 <td class="px-2 py-1.5 text-right">
@@ -228,10 +235,12 @@ function Cell({
   snap,
   onOpen,
   weekStart,
+  tailMax,
 }: {
   snap: TeamPulseSnapshot | null;
   onOpen: () => void;
   weekStart: string;
+  tailMax: number;
 }): JSX.Element {
   if (!snap) {
     return (
@@ -246,7 +255,7 @@ function Cell({
   }
   const tooltip = [
     `${weekStart} · ${STATUS_LABEL[snap.status]}`,
-    `хвосты ${snap.tailIndex}/10`,
+    `хвосты ${snap.tailIndex}`,
     snap.escalations > 0
       ? `эскалаций ${snap.escalations}${
           snap.escalationKind ? ` · ${ESC_KIND_LABEL[snap.escalationKind]}` : ''
@@ -256,8 +265,9 @@ function Cell({
   ]
     .filter(Boolean)
     .join('\n');
-  // Прозрачность опционально как индикатор tailIndex (0..10 → 50%..100%).
-  const op = 0.5 + (snap.tailIndex / 10) * 0.5;
+  // Прозрачность как индикатор tailIndex относительно глобального max в отчёте
+  // (50%..100%). На плоских/нулевых данных все ячейки будут 50% — это OK.
+  const op = 0.5 + (snap.tailIndex / tailMax) * 0.5;
   return (
     <button
       type="button"

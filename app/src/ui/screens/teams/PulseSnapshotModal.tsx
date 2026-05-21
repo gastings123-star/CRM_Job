@@ -148,7 +148,7 @@ function PulseSnapshotForm({
           class="w-full rounded-lg border border-blue-500/40 bg-blue-500/10 px-3 py-2 text-sm text-blue-200 transition-colors hover:bg-blue-500/20"
         >
           Как на прошлой неделе ({previous.weekStart}):{' '}
-          <span class="font-semibold">{statusGlyph(previous.status)}</span> хвосты {previous.tailIndex}/10
+          <span class="font-semibold">{statusGlyph(previous.status)}</span> хвосты {previous.tailIndex}
         </button>
       )}
 
@@ -168,16 +168,15 @@ function PulseSnapshotForm({
             </Select>
           )}
         </Field>
-        <Field label="Хвосты (0..10)">
+        <Field label="Хвосты (шт)">
           {(p) => (
             <TextInput
               {...p}
               type="number"
               min={0}
-              max={10}
               step={1}
               value={tailIndex}
-              onInput={(e) => setTailIndex(clamp(Number(e.currentTarget.value), 0, 10))}
+              onInput={(e) => setTailIndex(Math.max(0, Number(e.currentTarget.value) || 0))}
             />
           )}
         </Field>
@@ -264,7 +263,3 @@ function statusGlyph(s: PulseStatus): string {
   return s === 'green' ? '🟢' : s === 'yellow' ? '🟡' : '🔴';
 }
 
-function clamp(v: number, lo: number, hi: number): number {
-  if (!Number.isFinite(v)) return lo;
-  return Math.max(lo, Math.min(hi, v));
-}

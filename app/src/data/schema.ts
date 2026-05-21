@@ -343,8 +343,8 @@ export const TeamPulseSnapshotSchema = z
     /** ISO-дата понедельника недели, например `2026-05-11`. */
     weekStart: z.string(),
     status: PulseStatus.default('green'),
-    /** 0..10 — субъективная плотность хвостов. */
-    tailIndex: z.number().min(0).max(10).default(0),
+    /** Хвосты (шт) — целое >= 0, без верхней границы. */
+    tailIndex: z.number().min(0).default(0),
     /** Сколько эскалаций было за неделю (счётчик). */
     escalations: z.number().min(0).default(0),
     /** Тип «главной» эскалации, опционально. */
