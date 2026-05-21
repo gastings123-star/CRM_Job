@@ -141,16 +141,25 @@ export function sparklineData(
 }
 
 /** SVG-path для линии спарклайна (только по непустым точкам). */
+/**
+ * Максимум tailIndex по непустым точкам — для нормализации шкалы.
+ * Возвращает минимум 1, чтобы избежать деления на ноль на плоских рядах.
+ */
+export function maxTailIndex(points: SparklinePoint[]): number {
+  let m = 0;
+  for (const p of points) if (p.value !== null && p.value > m) m = p.value;
+  return m > 0 ? m : 1;
+}
+
 export function sparklinePath(
   points: SparklinePoint[],
   width: number,
   height: number,
+  scaleMax?: number,
 ): string {
-  const max = 10; // tailIndex 0..10
-  const min = 0;
+  const max = scaleMax ?? maxTailIndex(points);
   const stepX = points.length > 1 ? width / (points.length - 1) : 0;
-  const yOf = (v: number): number =>
-    height - ((v - min) / (max - min || 1)) * height;
+  const yOf = (v: number): number => height - (v / max) * height;
   let d = '';
   let started = false;
   points.forEach((p, i) => {

@@ -8,6 +8,7 @@ import { toast } from '@/state/ui';
 import {
   currentStreak,
   escalationsWindow,
+  maxTailIndex,
   mondayOf,
   recentWeeks,
   snapshotsForTeam,
@@ -460,7 +461,10 @@ function Sparkline({
 }): JSX.Element {
   const W = 480;
   const H = 56;
-  const path = sparklinePath(points, W, H);
+  // Шкала по реальному максимуму ряда (минимум 1, чтобы избежать /0
+  // на плоских/нулевых данных). tailIndex теперь не ограничен 10.
+  const scale = maxTailIndex(points);
+  const path = sparklinePath(points, W, H, scale);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} class="block w-full" aria-label="Спарклайн tailIndex">
       {/* Сетка */}
@@ -472,7 +476,7 @@ function Sparkline({
         if (p.value === null) return null;
         const stepX = points.length > 1 ? W / (points.length - 1) : 0;
         const x = i * stepX;
-        const y = H - (p.value / 10) * H;
+        const y = H - (p.value / scale) * H;
         const fill =
           p.status === 'green' ? '#34d399' : p.status === 'yellow' ? '#fbbf24' : p.status === 'red' ? '#f87171' : '#94a3b8';
         return <circle key={i} cx={x} cy={y} r="3" fill={fill} />;
@@ -516,7 +520,7 @@ function SnapshotRow({
     <li class="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2 text-sm">
       <span class={`inline-block h-2.5 w-2.5 rounded-full ${STATUS_DOT[snap.status]}`} />
       <span class="tabular-nums text-slate-300">{snap.weekStart}</span>
-      <span class="text-slate-400">хвосты: {snap.tailIndex}/10</span>
+      <span class="text-slate-400">хвосты: {snap.tailIndex}</span>
       {snap.escalations > 0 && (
         <span class="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-300">
           {snap.escalations} эск.
