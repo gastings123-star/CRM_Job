@@ -1,7 +1,10 @@
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { LOCAL_MODE } from './local-mode';
+import { localSession } from './local-client';
 
 export async function getSession(): Promise<Session | null> {
+  if (LOCAL_MODE) return localSession;
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
   return data.session;
@@ -31,12 +34,17 @@ export async function signInWithGoogle(): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
+  if (LOCAL_MODE) return;
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
   window.location.reload();
 }
 
 export function onAuthChange(cb: (session: Session | null) => void): () => void {
+  if (LOCAL_MODE)
+    return () => {
+      /* Local mode has no auth subscription. */
+    };
   const { data } = supabase.auth.onAuthStateChange((_event, session) => cb(session));
   return () => data.subscription.unsubscribe();
 }

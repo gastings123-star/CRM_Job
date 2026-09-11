@@ -1,3 +1,4 @@
+import { useViewState } from '@/ui/hooks/useViewState';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 import { useEffect, useMemo, useState } from 'preact/hooks';
@@ -51,14 +52,20 @@ export function CrmScreen(): JSX.Element {
   const loc = useLocation();
   const employees = employeesRepo.signal.value;
   const now = useMemo(() => new Date(), []);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useViewState('crm/CrmScreen.tsx:query', '');
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(false);
-  const [sort, setSort] = useState<SortState | null>({ key: 'fullName', dir: 'asc' });
-  const [activeList, setActiveList] = useState<SmartListId>('all');
+  const [sort, setSort] = useViewState<SortState | null>('crm/CrmScreen.tsx:sort', {
+    key: 'fullName',
+    dir: 'asc',
+  });
+  const [activeList, setActiveList] = useViewState<SmartListId>(
+    'crm/CrmScreen.tsx:activeList',
+    'all',
+  );
   /** Фильтр по команде; '' = все, '__none__' = «без команды». */
-  const [teamFilter, setTeamFilter] = useState<string>('');
+  const [teamFilter, setTeamFilter] = useViewState<string>('crm/CrmScreen.tsx:teamFilter', '');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState<null | 'team' | 'grade' | 'promotion'>(null);
 
@@ -261,11 +268,7 @@ export function CrmScreen(): JSX.Element {
           onChange={setActiveList}
           now={now}
         />
-        <TeamFilter
-          employees={employees}
-          value={teamFilter}
-          onChange={setTeamFilter}
-        />
+        <TeamFilter employees={employees} value={teamFilter} onChange={setTeamFilter} />
       </div>
 
       {loading && employees.length === 0 ? (
@@ -410,8 +413,7 @@ function TeamFilter({
     };
   }, [employees]);
 
-  const label =
-    value === '' ? 'Все команды' : value === '__none__' ? 'Без команды' : value;
+  const label = value === '' ? 'Все команды' : value === '__none__' ? 'Без команды' : value;
 
   return (
     <label class="inline-flex items-center gap-2 text-xs text-slate-300">
@@ -425,16 +427,16 @@ function TeamFilter({
           title={label}
         >
           <option value="">Все команды · {employees.length}</option>
-          {teams.none > 0 && (
-            <option value="__none__">Без команды · {teams.none}</option>
-          )}
+          {teams.none > 0 && <option value="__none__">Без команды · {teams.none}</option>}
           {teams.items.map(([name, n]) => (
             <option key={name} value={name}>
               {name} · {n}
             </option>
           ))}
         </select>
-        <span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">▾</span>
+        <span class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
+          ▾
+        </span>
       </div>
     </label>
   );
@@ -490,9 +492,7 @@ function EmployeesTable({
   if (rows.length === 0) {
     return (
       <div class="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-slate-400">
-        {totalQuery
-          ? <>По запросу «{totalQuery}» ничего не найдено</>
-          : <>В этом срезе пусто</>}
+        {totalQuery ? <>По запросу «{totalQuery}» ничего не найдено</> : <>В этом срезе пусто</>}
       </div>
     );
   }
@@ -510,15 +510,31 @@ function EmployeesTable({
                 class="h-4 w-4 cursor-pointer"
               />
             </th>
-            <SortableTh sort={sort} k="fullName" onSort={onSort}>ФИО</SortableTh>
-            <SortableTh sort={sort} k="role" onSort={onSort}>Должность</SortableTh>
-            <SortableTh sort={sort} k="team" onSort={onSort}>Команда</SortableTh>
-            <SortableTh sort={sort} k="grade" onSort={onSort}>Грейд</SortableTh>
-            <SortableTh sort={sort} k="risk" onSort={onSort}>Риск</SortableTh>
-            <SortableTh sort={sort} k="load" onSort={onSort}>Загрузка</SortableTh>
+            <SortableTh sort={sort} k="fullName" onSort={onSort}>
+              ФИО
+            </SortableTh>
+            <SortableTh sort={sort} k="role" onSort={onSort}>
+              Должность
+            </SortableTh>
+            <SortableTh sort={sort} k="team" onSort={onSort}>
+              Команда
+            </SortableTh>
+            <SortableTh sort={sort} k="grade" onSort={onSort}>
+              Грейд
+            </SortableTh>
+            <SortableTh sort={sort} k="risk" onSort={onSort}>
+              Риск
+            </SortableTh>
+            <SortableTh sort={sort} k="load" onSort={onSort}>
+              Загрузка
+            </SortableTh>
             <th class="px-3 py-3 font-medium text-slate-400">Готовность</th>
-            <SortableTh sort={sort} k="oneonone" onSort={onSort}>1-on-1</SortableTh>
-            <SortableTh sort={sort} k="hireDate" onSort={onSort}>Дата найма</SortableTh>
+            <SortableTh sort={sort} k="oneonone" onSort={onSort}>
+              1-on-1
+            </SortableTh>
+            <SortableTh sort={sort} k="hireDate" onSort={onSort}>
+              Дата найма
+            </SortableTh>
             <th class="px-3 py-3 text-right font-medium">Действия</th>
           </tr>
         </thead>
@@ -552,7 +568,9 @@ function EmployeesTable({
                   </button>
                 </td>
                 <td class="px-3 py-2.5 text-slate-300">{e.role || '—'}</td>
-                <td class="px-3 py-2.5 text-slate-300">{e.team || <span class="text-slate-500">—</span>}</td>
+                <td class="px-3 py-2.5 text-slate-300">
+                  {e.team || <span class="text-slate-500">—</span>}
+                </td>
                 <td class="px-3 py-2.5 text-slate-300">{e.grade}</td>
                 <td class="px-3 py-2.5">
                   <RiskBadge level={risk.level} score={risk.score} />
@@ -659,12 +677,7 @@ function OneOnOneCell({ days }: { days: number | null }): JSX.Element {
   if (days === null) {
     return <span class="text-xs text-red-300/80">никогда</span>;
   }
-  const tone =
-    days > 60
-      ? 'text-red-300'
-      : days > 30
-        ? 'text-amber-300'
-        : 'text-slate-300';
+  const tone = days > 60 ? 'text-red-300' : days > 30 ? 'text-amber-300' : 'text-slate-300';
   return (
     <span class={`text-xs tabular-nums ${tone}`} title={`Последний 1-on-1 ${days} д. назад`}>
       {days} д
@@ -737,8 +750,11 @@ function compareBy(key: SortKey, now: Date): (a: Employee, b: Employee) => numbe
     return (a, b) => collator.compare(a.team || '￿', b.team || '￿');
   }
   // Доп. вычисляемые поля учтены выше; в остальных случаях — текстовая сортировка.
-  return (a, b) => collator.compare(String(a[key as 'fullName' | 'role' | 'email'] ?? ''),
-                                    String(b[key as 'fullName' | 'role' | 'email'] ?? ''));
+  return (a, b) =>
+    collator.compare(
+      String(a[key as 'fullName' | 'role' | 'email'] ?? ''),
+      String(b[key as 'fullName' | 'role' | 'email'] ?? ''),
+    );
 }
 
 /**
@@ -774,11 +790,7 @@ function ExportMenu({ rows, totalLabel }: { rows: Employee[]; totalLabel: string
       </Button>
       {open && (
         <>
-          <div
-            class="fixed inset-0 z-20"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
+          <div class="fixed inset-0 z-20" onClick={() => setOpen(false)} aria-hidden="true" />
           <div class="absolute right-0 top-full z-30 mt-1 min-w-[10rem] overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-xl">
             <button
               type="button"
@@ -895,7 +907,10 @@ function BulkPickerModal({
     } else if (kind === 'grade') {
       onApply({ grade }, `Грейд «${grade}» назначен`);
     } else if (kind === 'promotion') {
-      onApply({ promotionReadiness: promotion as Employee['promotionReadiness'] }, `Готовность «${promotion}» назначена`);
+      onApply(
+        { promotionReadiness: promotion as Employee['promotionReadiness'] },
+        `Готовность «${promotion}» назначена`,
+      );
     }
   }
 

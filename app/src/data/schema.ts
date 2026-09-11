@@ -54,6 +54,7 @@ export type Load = z.infer<typeof LoadSchema>;
 
 export const TaskItemSchema = z
   .object({
+    id: z.string().optional(),
     text: z.string().default(''),
     /** `'выполнена' | 'в работе' | 'не начата'`. */
     status: z.string().default(''),
@@ -65,6 +66,7 @@ export type TaskItem = z.infer<typeof TaskItemSchema>;
 
 export const DevelopmentItemSchema = z
   .object({
+    id: z.string().optional(),
     zone: z.string().default(''),
     /** `'выполнено' | 'в работе' | 'не начато'`. */
     status: z.string().default(''),
@@ -383,3 +385,6 @@ export type TeamPulseSnapshot = z.infer<typeof TeamPulseSnapshotSchema>;
 // ---------------------------------------------------------------
 
 export const SCHEMA_VERSION = 2 as const;
+
+// Management OS schemas are re-exported from the central schema entry point.
+export * from './management';

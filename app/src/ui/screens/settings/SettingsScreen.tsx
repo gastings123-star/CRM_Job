@@ -2,6 +2,8 @@ import type { JSX } from 'preact';
 import { useRef, useState } from 'preact/hooks';
 import { Button } from '@/ui/components/Button';
 import { toast } from '@/state/ui';
+import { LOCAL_MODE } from '@/infra/local-mode';
+import { LocalBackup } from '@/ui/screens/management/LocalBackup';
 import {
   migrateLegacy,
   readLegacyFromJson,
@@ -63,9 +65,7 @@ export function SettingsScreen(): JSX.Element {
 
   function applyImport(): void {
     if (!report) return;
-    const r = source
-      ? migrateLegacy({ dryRun: false, source })
-      : migrateLegacy({ dryRun: false });
+    const r = source ? migrateLegacy({ dryRun: false, source }) : migrateLegacy({ dryRun: false });
     setReport(r);
     const total = r.employees.toImport + r.teams.toImport;
     if (total === 0) {
@@ -81,28 +81,23 @@ export function SettingsScreen(): JSX.Element {
     <div class="space-y-6">
       <header>
         <h2 class="text-2xl font-semibold">Настройки</h2>
-        <p class="mt-1 text-sm text-slate-400">
-          Перенос данных из старой версии Staff CRM.
-        </p>
+        <p class="mt-1 text-sm text-slate-400">Перенос данных из старой версии Staff CRM.</p>
       </header>
 
+      {LOCAL_MODE && <LocalBackup />}
       <section class="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-6">
         <h3 class="text-lg font-semibold">Импорт данных</h3>
         <p class="text-sm text-slate-400">
           Источник — localStorage этого браузера (ключи <code>staff_crm_v1</code>,{' '}
-          <code>staff_crm_teams_v1</code>) или JSON-бэкап старого приложения.
-          Импорт идемпотентен: повторный запуск пропускает уже перенесённые записи
-          по сохранённому <code>legacyId</code>.
+          <code>staff_crm_teams_v1</code>) или JSON-бэкап старого приложения. Импорт идемпотентен:
+          повторный запуск пропускает уже перенесённые записи по сохранённому <code>legacyId</code>.
         </p>
 
         <div class="flex flex-wrap gap-3">
           <Button variant="secondary" onClick={previewFromLocalStorage}>
             Предпросмотр из localStorage
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => fileRef.current?.click()}
-          >
+          <Button variant="secondary" onClick={() => fileRef.current?.click()}>
             Выбрать JSON-файл…
           </Button>
           <input
@@ -151,9 +146,7 @@ function ReportView({
       <div class="flex items-center gap-3">
         <span
           class={`rounded-full px-2.5 py-0.5 text-xs ${
-            report.dryRun
-              ? 'bg-blue-500/20 text-blue-300'
-              : 'bg-emerald-500/20 text-emerald-300'
+            report.dryRun ? 'bg-blue-500/20 text-blue-300' : 'bg-emerald-500/20 text-emerald-300'
           }`}
         >
           {report.dryRun ? 'Предпросмотр' : 'Применено'}

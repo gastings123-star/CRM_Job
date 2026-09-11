@@ -147,6 +147,25 @@ describe('SyncQueue', () => {
     expect(mocks.deleteMock).toHaveBeenCalledWith('personal', 'user-1');
   });
 
+  it('management: upsert использует user_id и отдельную таблицу', async () => {
+    const q = new SyncQueue(memStorage());
+    q.enqueue({
+      kind: 'upsert',
+      table: 'management',
+      id: 'user-1',
+      payload: { payload: { version: 1, revision: 1 } },
+    });
+    await q.flush();
+    expect(mocks.upsertMock).toHaveBeenCalledWith(
+      'management',
+      expect.objectContaining({
+        user_id: 'user-1',
+        payload: { version: 1, revision: 1 },
+      }),
+    );
+    expect(q.getStatus().pending).toBe(0);
+  });
+
   it('миграция v1 → v2: старая очередь читается как update/upsert', () => {
     const storage = memStorage();
     storage.setItem(
@@ -160,5 +179,24 @@ describe('SyncQueue', () => {
     expect(q.getStatus().pending).toBe(2);
     // legacy ключ удалён
     expect(storage.getItem('crm:sync:queue:v1')).toBeNull();
+  });
+  it.each(['e1', 'e2'])('does not discard %s updates arriving during a request', async (nextId) => {
+    const original = mocks.fromMock.getMockImplementation()!;
+    let release!: () => void;
+    const pending = new Promise<{ error: null }>((resolve) => {
+      release = () => resolve({ error: null });
+    });
+    mocks.fromMock.mockImplementationOnce((table: string) => ({
+      ...original(table),
+      update: (_patch: unknown) => ({ eq: (_col: string, _id: string) => pending }),
+    }));
+    const q = new SyncQueue(memStorage());
+    q.enqueue({ kind: 'update', table: 'employees', id: 'e1', payload: { name: 'first' } });
+    const flushing = q.flush();
+    q.enqueue({ kind: 'update', table: 'employees', id: nextId, payload: { name: 'latest' } });
+    release();
+    await flushing;
+    expect(mocks.updateMock).toHaveBeenCalledWith('employees', { name: 'latest' });
+    expect(q.getStatus().pending).toBe(0);
   });
 });

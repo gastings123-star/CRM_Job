@@ -41,27 +41,25 @@ describe('CrmScreen — фильтр по команде', () => {
         <CrmScreen />
       </Wrap>,
     );
-    const sel = screen.getByLabelText(/фильтр по команде/i) as HTMLSelectElement;
+    const sel = screen.getByLabelText(/фильтр по команде/i);
+    if (!(sel instanceof HTMLSelectElement)) throw new Error('Expected a team select');
     const options = Array.from(sel.options).map((o) => o.textContent ?? '');
     expect(options[0]).toMatch(/все команды · 4/i);
     expect(options.some((t) => /без команды · 1/i.test(t))).toBe(true);
-    expect(options.some((t) => /EFS · 2/.test(t))).toBe(true);
-    expect(options.some((t) => /Сити · 1/.test(t))).toBe(true);
+    expect(options.some((t) => t.includes('EFS · 2'))).toBe(true);
+    expect(options.some((t) => t.includes('Сити · 1'))).toBe(true);
   });
 
   it('выбор команды оставляет только её сотрудников в таблице', async () => {
     vi.spyOn(employeesRepo, 'loadAll').mockResolvedValue(undefined);
     vi.spyOn(teamsRepo, 'loadAll').mockResolvedValue(undefined);
-    employeesRepo.signal.value = [
-      emp('1', 'Анна', 'EFS'),
-      emp('2', 'Виктор', 'Сити'),
-    ];
+    employeesRepo.signal.value = [emp('1', 'Анна', 'EFS'), emp('2', 'Виктор', 'Сити')];
     render(
       <Wrap>
         <CrmScreen />
       </Wrap>,
     );
-    const sel = screen.getByLabelText(/фильтр по команде/i) as HTMLSelectElement;
+    const sel = screen.getByLabelText(/фильтр по команде/i);
     fireEvent.change(sel, { target: { value: 'EFS' } });
     await waitFor(() => {
       expect(screen.queryByText('Виктор')).toBeNull();
@@ -72,16 +70,13 @@ describe('CrmScreen — фильтр по команде', () => {
   it('выбор «Без команды» оставляет только сотрудников без team', async () => {
     vi.spyOn(employeesRepo, 'loadAll').mockResolvedValue(undefined);
     vi.spyOn(teamsRepo, 'loadAll').mockResolvedValue(undefined);
-    employeesRepo.signal.value = [
-      emp('1', 'Анна', 'EFS'),
-      emp('2', 'Бездомный', ''),
-    ];
+    employeesRepo.signal.value = [emp('1', 'Анна', 'EFS'), emp('2', 'Бездомный', '')];
     render(
       <Wrap>
         <CrmScreen />
       </Wrap>,
     );
-    const sel = screen.getByLabelText(/фильтр по команде/i) as HTMLSelectElement;
+    const sel = screen.getByLabelText(/фильтр по команде/i);
     fireEvent.change(sel, { target: { value: '__none__' } });
     await waitFor(() => {
       expect(screen.queryByText('Анна')).toBeNull();

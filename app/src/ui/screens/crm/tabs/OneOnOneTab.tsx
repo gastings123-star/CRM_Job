@@ -1,3 +1,4 @@
+import { buildAutoAgenda } from '@/domain/agenda';
 import type { JSX } from 'preact';
 import { useMemo, useState } from 'preact/hooks';
 import type { Employee, OneOnOne, OneOnOneHistoryItem, TaskItem } from '@/data/schema';
@@ -123,7 +124,12 @@ export function OneOnOneTab({ employee }: { employee: Employee }): JSX.Element {
     // Follow-up → новые задачи сверху, статус «не начата».
     const newTasks: TaskItem[] =
       payload.followUps.length > 0
-        ? payload.followUps.map((t) => ({ text: t, status: 'не начата', due: '' }))
+        ? payload.followUps.map((t) => ({
+            id: crypto.randomUUID(),
+            text: t,
+            status: 'не начата',
+            due: '',
+          }))
         : [];
     const tasks = [...newTasks, ...(employee.tasks ?? [])];
 
@@ -138,10 +144,29 @@ export function OneOnOneTab({ employee }: { employee: Employee }): JSX.Element {
     );
   }
 
+  const suggestedAgenda = buildAutoAgenda(employee, new Date());
   const checkedCount = Object.values(state.agendaChecklist).filter(Boolean).length;
 
   return (
     <form onSubmit={handleSave} class="space-y-6">
+      <section class="rounded-xl border border-blue-400/20 bg-blue-500/5 p-4">
+        <h3 class="text-sm font-semibold">Подготовка по данным сотрудника</h3>
+        {suggestedAgenda.length ? (
+          <ul class="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-300">
+            {suggestedAgenda.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        ) : (
+          <p class="mt-2 text-sm text-slate-400">
+            По текущим данным дополнительных пунктов нет. Проверьте предыдущие договорённости в
+            истории встречи.
+          </p>
+        )}
+        <p class="mt-3 text-xs text-slate-500">
+          Это предложения к повестке; состав встречи выбираете вы.
+        </p>
+      </section>
       <section class="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-5">
         <header class="flex items-center justify-between">
           <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">
@@ -295,7 +320,9 @@ function FinishMeetingModal({
         onSubmit={onSubmit}
       />
     </Modal>
-  ) : null as unknown as JSX.Element;
+  ) : (
+    (null as unknown as JSX.Element)
+  );
 }
 
 function FinishMeetingBody({
@@ -350,7 +377,12 @@ function FinishMeetingBody({
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Field label="Дата встречи">
           {(p) => (
-            <TextInput {...p} type="date" value={date} onInput={(e) => setDate(e.currentTarget.value)} />
+            <TextInput
+              {...p}
+              type="date"
+              value={date}
+              onInput={(e) => setDate(e.currentTarget.value)}
+            />
           )}
         </Field>
         <Field label="Следующая встреча" hint="по умолчанию +30 дней">
@@ -430,7 +462,12 @@ function FinishMeetingBody({
               }
             }}
           />
-          <Button type="button" variant="secondary" onClick={addFollowUp} disabled={!newFollowUp.trim()}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={addFollowUp}
+            disabled={!newFollowUp.trim()}
+          >
             + Добавить
           </Button>
         </div>
@@ -468,9 +505,7 @@ function HistoryRow({
       <details>
         <summary class="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm text-slate-100">
           <span class="tabular-nums">{item.date || '—'}</span>
-          {item.summary && (
-            <span class="truncate text-slate-400">{item.summary}</span>
-          )}
+          {item.summary && <span class="truncate text-slate-400">{item.summary}</span>}
           <span class="ml-auto flex items-center gap-2 text-xs text-slate-500">
             {item.checklist && <span>✓ {checkedCount}/5</span>}
             {followUps.length > 0 && <span>· follow-up: {followUps.length}</span>}
@@ -483,7 +518,13 @@ function HistoryRow({
               value={item.date}
               onInput={(e) => onChange({ ...item, date: e.currentTarget.value })}
             />
-            <Button type="button" variant="ghost" size="sm" onClick={onRemove} class="justify-self-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onRemove}
+              class="justify-self-end"
+            >
               × Удалить запись
             </Button>
           </div>

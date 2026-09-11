@@ -11,6 +11,7 @@ import {
 } from '@/domain/calendar';
 import { toast } from '@/state/ui';
 import { Button } from '@/ui/components/Button';
+import { ManagementCalendar } from '@/ui/screens/management/ManagementLinks';
 
 const RU_MONTHS = [
   'Январь',
@@ -120,6 +121,7 @@ export function CalendarScreen(): JSX.Element {
 
   return (
     <div class="space-y-4">
+      <ManagementCalendar year={year} month={month} />
       <header class="flex flex-wrap items-center gap-3">
         <h2 class="text-2xl font-semibold">Календарь</h2>
         <div class="ml-auto flex items-center gap-2">
@@ -189,13 +191,7 @@ export function CalendarScreen(): JSX.Element {
   );
 }
 
-function EventChip({
-  event,
-  onOpen,
-}: {
-  event: CalendarEvent;
-  onOpen: () => void;
-}): JSX.Element {
+function EventChip({ event, onOpen }: { event: CalendarEvent; onOpen: () => void }): JSX.Element {
   return (
     <button
       type="button"

@@ -1,10 +1,10 @@
-import type { JSX } from 'preact';
+import type { JSX, ComponentChildren } from 'preact';
 import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
 import type { Session } from '@supabase/supabase-js';
 import { signOut } from '@/infra/auth';
 import { syncQueue, type SyncStatus } from '@/infra/sync';
 import { useEffect, useState } from 'preact/hooks';
-import { employeeDetailPath, navItems, routes, teamDetailPath, type RouteKey } from './routes';
+import { employeeDetailPath, routes, teamDetailPath } from './routes';
 import { Placeholder } from '@/ui/screens/Placeholder';
 import { CrmScreen } from '@/ui/screens/crm/CrmScreen';
 import { EmployeeDetailScreen } from '@/ui/screens/crm/EmployeeDetail';
@@ -22,6 +22,10 @@ import { ToastHost } from '@/ui/components/ToastHost';
 import { ConfirmDialogHost } from '@/ui/components/ConfirmDialogHost';
 import { CommandPaletteHost } from '@/ui/components/CommandPaletteHost';
 import { openCommandPalette } from '@/state/command-palette';
+import { LOCAL_MODE } from '@/infra/local-mode';
+import { WorkDesk } from '@/ui/screens/workdesk/WorkDesk';
+import { OverviewScreen } from '@/ui/screens/workdesk/OverviewScreen';
+import { ManagementScreen } from '@/ui/screens/management/ManagementScreen';
 
 /**
  * Авторизованная часть приложения: топ-бар, навигация, область контента.
@@ -32,22 +36,27 @@ export function AppShell({ session }: { session: Session }): JSX.Element {
     <LocationProvider>
       <div class="min-h-screen">
         <TopBar session={session} />
-        <main class="mx-auto max-w-7xl p-6">
-          <Router>
-            <Route path={routes.dashboard.path} component={DashboardScreen} />
-            <Route path={routes.crm.path} component={CrmScreen} />
-            <Route path={employeeDetailPath} component={EmployeeDetailScreen} />
-            <Route path={routes.teams.path} component={TeamsScreen} />
-            <Route path={teamDetailPath} component={TeamDetailScreen} />
-            <Route path={routes.pulse.path} component={PulseReportScreen} />
-            <Route path={routes.tasks.path} component={TasksScreen} />
-            <Route path={routes.calendar.path} component={CalendarScreen} />
-            <Route path={routes.development.path} component={DevelopmentScreen} />
-            <Route path={routes.personal.path} component={PersonalScreen} />
-            <Route path={routes.projects.path} component={ProjectsScreen} />
-            <Route path={routes.settings.path} component={SettingsScreen} />
-            <Route default component={NotFoundScreen} />
-          </Router>
+        <main class="mx-auto max-w-[1600px] p-4 sm:p-6">
+          <Workspace>
+            <Router>
+              <Route path={routes.overview.path} component={OverviewScreen} />
+              <Route path={routes.analytics.path} component={DashboardScreen} />
+              <Route path={routes.management.path} component={EmbeddedManagement} />
+              <Route path={routes.dashboard.path} component={EmptyDesk} />
+              <Route path={routes.crm.path} component={CrmScreen} />
+              <Route path={employeeDetailPath} component={EmployeeDetailScreen} />
+              <Route path={routes.teams.path} component={TeamsScreen} />
+              <Route path={teamDetailPath} component={TeamDetailScreen} />
+              <Route path={routes.pulse.path} component={PulseReportScreen} />
+              <Route path={routes.tasks.path} component={TasksScreen} />
+              <Route path={routes.calendar.path} component={CalendarScreen} />
+              <Route path={routes.development.path} component={DevelopmentScreen} />
+              <Route path={routes.personal.path} component={PersonalScreen} />
+              <Route path={routes.projects.path} component={ProjectsScreen} />
+              <Route path={routes.settings.path} component={SettingsScreen} />
+              <Route default component={NotFoundScreen} />
+            </Router>
+          </Workspace>
         </main>
         <ToastHost />
         <ConfirmDialogHost />
@@ -55,6 +64,16 @@ export function AppShell({ session }: { session: Session }): JSX.Element {
       </div>
     </LocationProvider>
   );
+}
+
+function EmptyDesk() {
+  return null;
+}
+function EmbeddedManagement() {
+  return <ManagementScreen embedded />;
+}
+function Workspace({ children }: { children: ComponentChildren }) {
+  return <WorkDesk>{children}</WorkDesk>;
 }
 
 // ---------------------------------------------------------------
@@ -75,28 +94,31 @@ function TopBar({ session }: { session: Session }): JSX.Element {
 
   return (
     <header class="sticky top-0 z-30 border-b border-white/10 bg-slate-950/80 backdrop-blur">
-      <div class="mx-auto flex max-w-7xl items-center gap-6 px-6 py-3">
+      <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-6 py-3">
         <h1 class="text-lg font-semibold">Staff CRM</h1>
         <Nav />
         <div class="ml-auto flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => openCommandPalette()}
-            class="hidden items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300 hover:bg-white/10 md:inline-flex"
-            title="Поиск / навигация (Cmd+K)"
-          >
-            <span>Поиск</span>
-            <span class="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">⌘K</span>
-          </button>
-          <SyncBadge status={sync} />
+          {LOCAL_MODE ? (
+            <span class="text-xs text-slate-400">
+              {sync.lastError
+                ? `Ошибка сохранения: ${sync.lastError}`
+                : sync.pending
+                  ? `Сохранение на ПК… ${sync.pending}`
+                  : 'Локально · Сохранено на ПК'}
+            </span>
+          ) : (
+            <SyncBadge status={sync} />
+          )}
           <span class="hidden text-sm text-slate-400 sm:inline">{session.user.email}</span>
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            class="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/10"
-          >
-            Выйти
-          </button>
+          {!LOCAL_MODE && (
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              class="rounded-lg border border-white/10 px-3 py-1.5 text-sm hover:bg-white/10"
+            >
+              Выйти
+            </button>
+          )}
         </div>
       </div>
     </header>
@@ -106,28 +128,37 @@ function TopBar({ session }: { session: Session }): JSX.Element {
 function Nav(): JSX.Element {
   const loc = useLocation();
   return (
-    <nav class="flex items-center gap-1">
-      {navItems.map((k: RouteKey) => {
-        const r = routes[k];
-        const isActive =
-          r.path === '/' ? loc.path === '/' : loc.path === r.path || loc.path.startsWith(r.path + '/');
-        return (
+      <nav class="flex flex-wrap items-center gap-2" aria-label="Основная навигация">
+        {[{ path: routes.dashboard.path, label: 'Рабочий стол' }, routes.overview].map((r) => (
           <a
-            key={k}
+            key={r.path}
             href={r.path}
+            class={`rounded-lg px-3 py-2 text-sm ${loc.path === r.path ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`}
             onClick={(e) => {
               e.preventDefault();
               loc.route(r.path);
             }}
-            class={`rounded-md px-2.5 py-1.5 text-sm transition-colors ${
-              isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-            }`}
           >
             {r.label}
           </a>
-        );
-      })}
-    </nav>
+        ))}
+        <button
+          class="rounded-lg px-3 py-2 text-sm text-slate-400 hover:text-white"
+          onClick={openCommandPalette}
+        >
+          Поиск
+        </button>
+        <a
+          class="rounded-lg px-3 py-2 text-sm text-slate-400 hover:text-white"
+          href={routes.settings.path}
+          onClick={(e) => {
+            e.preventDefault();
+            loc.route(routes.settings.path);
+          }}
+        >
+          Настройки
+        </a>
+      </nav>
   );
 }
 
