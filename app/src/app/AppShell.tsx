@@ -4,7 +4,7 @@ import type { Session } from '@supabase/supabase-js';
 import { signOut } from '@/infra/auth';
 import { syncQueue, type SyncStatus } from '@/infra/sync';
 import { useEffect, useState } from 'preact/hooks';
-import { employeeDetailPath, routes, teamDetailPath } from './routes';
+import { employeeDetailPath, routes, sameRoutePath, teamDetailPath } from './routes';
 import { Placeholder } from '@/ui/screens/Placeholder';
 import { CrmScreen } from '@/ui/screens/crm/CrmScreen';
 import { EmployeeDetailScreen } from '@/ui/screens/crm/EmployeeDetail';
@@ -133,7 +133,7 @@ function Nav(): JSX.Element {
           <a
             key={r.path}
             href={r.path}
-            class={`rounded-lg px-3 py-2 text-sm ${loc.path === r.path ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`}
+            class={`rounded-lg px-3 py-2 text-sm ${sameRoutePath(loc.path, r.path) ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`}
             onClick={(e) => {
               e.preventDefault();
               loc.route(r.path);
