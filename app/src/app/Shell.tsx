@@ -17,13 +17,32 @@ import { Field, TextInput } from '@/ui/components/Field';
 export function Shell() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
-    void getSession().then((s) => {
+    let active = true;
+    const applySession = (s: Session | null) => {
+      if (!active) return;
       setSession(s);
       setLoading(false);
+      setBootError(null);
+    };
+    const timeout = window.setTimeout(() => {
+      if (!active) return;
+      setLoading(false);
+      setBootError('Не удалось проверить вход. Можно повторить попытку или войти заново.');
+    }, 8_000);
+    void getSession().then(applySession, (error: unknown) => {
+      if (!active) return;
+      setLoading(false);
+      setBootError(error instanceof Error ? error.message : String(error));
     });
-    return onAuthChange((s) => setSession(s));
+    const off = onAuthChange(applySession);
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+      off();
+    };
   }, []);
 
   if (loading) {
@@ -31,7 +50,7 @@ export function Shell() {
       <div class="flex min-h-screen items-center justify-center text-slate-400">Загрузка…</div>
     );
   }
-  if (!session) return <SignIn />;
+  if (!session) return <SignIn bootError={bootError} />;
   return <AppShell session={session} />;
 }
 
@@ -39,7 +58,7 @@ export function Shell() {
 // SignIn
 // ---------------------------------------------------------------
 
-function SignIn() {
+function SignIn({ bootError }: { bootError: string | null }) {
   const [email, setEmail] = useState('');
   const [linkSent, setLinkSent] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -74,6 +93,17 @@ function SignIn() {
     <div class="flex min-h-screen items-center justify-center">
       <div class="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-8 backdrop-blur">
         <h1 class="mb-4 text-2xl font-semibold">Staff CRM</h1>
+        {bootError && (
+          <div
+            role="alert"
+            class="mb-4 rounded-lg border border-amber-400/20 p-3 text-sm text-amber-200"
+          >
+            <p>{bootError}</p>
+            <Button variant="ghost" class="mt-2" onClick={() => window.location.reload()}>
+              Повторить проверку
+            </Button>
+          </div>
+        )}
         {linkSent ? (
           <p class="text-slate-300">
             Ссылка отправлена на <strong>{email}</strong>. Открой её, чтобы войти.
