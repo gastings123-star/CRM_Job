@@ -64,14 +64,22 @@ export function DevelopmentScreen(): JSX.Element {
           {overdue.length === 0 ? (
             <p class="text-sm text-slate-500">Просрочек нет.</p>
           ) : (
-            <IprList rows={overdue} onOpen={go} dayLabel={(d) => `просрочено ${Math.abs(d)} д`} />
+            <IprList
+              rows={overdue}
+              onOpen={(id) => loc.route(employeeUrl(id) + '?tab=extra')}
+              dayLabel={(d) => `просрочено ${Math.abs(d)} д`}
+            />
           )}
         </Card>
         <Card title="Скоро дедлайн (30 дней)" tone="yellow">
           {upcoming.length === 0 ? (
             <p class="text-sm text-slate-500">Ничего срочного.</p>
           ) : (
-            <IprList rows={upcoming} onOpen={go} dayLabel={(d) => `через ${d} д`} />
+            <IprList
+              rows={upcoming}
+              onOpen={(id) => loc.route(employeeUrl(id) + '?tab=extra')}
+              dayLabel={(d) => `через ${d} д`}
+            />
           )}
         </Card>
       </section>
@@ -90,11 +98,7 @@ export function DevelopmentScreen(): JSX.Element {
                   <span class="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-300 tabular-nums">
                     {e.managerRating?.score ?? '?'}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => go(e.id)}
-                    class="min-w-0 flex-1 text-left"
-                  >
+                  <button type="button" onClick={() => go(e.id)} class="min-w-0 flex-1 text-left">
                     <p class="truncate text-sm">{e.fullName || '— без имени —'}</p>
                     <p class="truncate text-xs text-slate-500">
                       {[e.role, e.team].filter(Boolean).join(' · ') || '—'}

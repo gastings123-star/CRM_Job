@@ -14,7 +14,8 @@
 import type { ZodType, ZodTypeDef } from 'zod';
 import { SCHEMA_VERSION } from '@/data/schema';
 
-const NS = 'crm';
+import { LOCAL_MODE } from './local-mode';
+const NS = LOCAL_MODE ? 'crm-local' : 'crm';
 
 function key(entity: string, version: number = SCHEMA_VERSION): string {
   return `${NS}:v${version}:${entity}`;

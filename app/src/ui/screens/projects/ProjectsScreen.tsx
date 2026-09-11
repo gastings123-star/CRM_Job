@@ -1,3 +1,4 @@
+import { useViewState } from '@/ui/hooks/useViewState';
 import type { JSX } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { employeesRepo, projectsRepo } from '@/infra/repos';
@@ -28,7 +29,7 @@ export function ProjectsScreen(): JSX.Element {
   const employees = employeesRepo.signal.value;
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useViewState('projects/ProjectsScreen.tsx:query', '');
 
   useEffect(() => {
     projectsRepo.loadAll().catch((e: unknown) => {

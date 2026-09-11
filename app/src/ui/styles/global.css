@@ -12,3 +12,33 @@
       radial-gradient(ellipse at bottom, rgba(139, 92, 246, 0.1), transparent 50%), #020617;
   }
 }
+
+/* Management OS: shared CRM theme and controls. */
+@layer components {
+  .mos-panel {
+    @apply rounded-2xl border border-white/10 bg-white/5 p-5;
+  }
+  .mos-input {
+    @apply w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400;
+  }
+  .mos-record {
+    @apply flex items-start justify-between gap-4 border-t border-white/5 p-4 text-sm;
+    overflow-wrap: anywhere;
+  }
+  .mos-table {
+    @apply w-full text-left text-sm tabular-nums;
+  }
+  .mos-table th {
+    @apply border-b border-white/10 px-3 py-3 text-xs font-medium text-slate-400;
+  }
+  .mos-table td {
+    @apply border-b border-white/5 px-3 py-4 align-top;
+  }
+  .mos-root h2,
+  .mos-root h3 {
+    text-wrap: balance;
+  }
+  .mos-root p {
+    text-wrap: pretty;
+  }
+}

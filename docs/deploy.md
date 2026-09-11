@@ -6,6 +6,11 @@ Pages-деплой выполняется автоматически воркф�
 
 URL: **https://gastings123-star.github.io/CRM_Job/**
 
+Перед публикацией версии с Management OS один раз выполнить
+`docs/supabase-migrations/2026-09-11-management-os.sql` в SQL Editor
+действующего проекта. Миграция добавляет отдельный singleton-документ на
+пользователя и RLS-политики; существующие таблицы CRM не изменяет.
+
 ## Что нужно настроить один раз
 
 ### 1. GitHub Pages → Source = GitHub Actions

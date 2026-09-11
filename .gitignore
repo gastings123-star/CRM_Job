@@ -1,1 +1,4 @@
 .DS_Store
+
+app/.local-data/
+app/dist-local/

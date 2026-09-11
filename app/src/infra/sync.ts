@@ -14,16 +14,18 @@
  *
  * Модель строк в БД (соглашение):
  *  - `employees | teams | projects`: `{ id uuid, owner_id uuid, payload jsonb, ... }`;
- *  - `personal`: `{ user_id uuid PK, payload jsonb, ... }`;
+ *  - `personal | management`: `{ user_id uuid PK, payload jsonb, ... }`;
  *  - `owner_id` проставляется триггером БД из `auth.uid()` (RLS).
  */
 import { supabase } from './supabase';
+import { LOCAL_MODE } from './local-mode';
 
 export type SyncTable =
   | 'employees'
   | 'teams'
   | 'projects'
   | 'personal'
+  | 'management'
   | 'team_pulse'
   | 'team_feedback';
 
@@ -51,8 +53,8 @@ export interface SyncStatus {
   lastFlushAt: number | null;
 }
 
-const QUEUE_KEY = 'crm:sync:queue:v2';
-const LEGACY_QUEUE_KEY = 'crm:sync:queue:v1';
+const QUEUE_KEY = `${LOCAL_MODE ? 'crm-local' : 'crm'}:sync:queue:v2`;
+const LEGACY_QUEUE_KEY = `${LOCAL_MODE ? 'crm-local' : 'crm'}:sync:queue:v1`;
 const MAX_ATTEMPTS = 5;
 const FLUSH_INTERVAL_MS = 15_000;
 
@@ -145,7 +147,7 @@ export class SyncQueue {
         opId: o.opId ?? crypto.randomUUID(),
         table: o.table,
         id: o.id,
-        kind: o.table === 'personal' ? 'upsert' : 'update',
+        kind: o.table === 'personal' || o.table === 'management' ? 'upsert' : 'update',
         payload: o.patch ?? {},
         enqueuedAt: o.enqueuedAt ?? Date.now(),
         attempts: o.attempts ?? 0,
@@ -225,12 +227,12 @@ export class SyncQueue {
     this.update({ pending: compressed.length });
     // Откладываем flush на microtask, чтобы серия synchronous enqueue
     // успела сжаться до старта сетевого запроса.
-    if (this.status.online) queueMicrotask(() => void this.flush());
+    if (this.status.online || LOCAL_MODE) queueMicrotask(() => void this.flush());
   }
 
   flush(): Promise<void> {
     if (this.flushingPromise) return this.flushingPromise;
-    if (!this.status.online) return Promise.resolve();
+    if (!this.status.online && !LOCAL_MODE) return Promise.resolve();
     this.flushingPromise = this.runFlush().finally(() => {
       this.flushingPromise = null;
     });
@@ -245,24 +247,37 @@ export class SyncQueue {
       if (!head) break;
       try {
         await this.apply(head);
-        queue.shift();
-        this.writeQueue(queue);
-        this.update({ pending: queue.length, lastError: null, lastFlushAt: Date.now() });
+        const latest = this.readQueue();
+        // Do not discard operations enqueued or merged while this request was in flight.
+        const sent = latest.findIndex(
+          (x) =>
+            x.opId === head.opId &&
+            JSON.stringify(x.payload) === JSON.stringify(head.payload) &&
+            x.kind === head.kind,
+        );
+        if (sent >= 0) latest.splice(sent, 1);
+        this.writeQueue(latest);
+        this.update({ pending: latest.length, lastError: null, lastFlushAt: Date.now() });
       } catch (e) {
-        head.attempts += 1;
-        if (head.attempts >= MAX_ATTEMPTS) {
-          this.deadLetter(head, e);
-          queue.shift();
-          this.writeQueue(queue);
+        // Preserve new enqueues even when the in-flight request fails.
+        const latest = this.readQueue();
+        const failed = latest.find((x) => x.opId === head.opId);
+        if (!failed) continue;
+        failed.attempts += 1;
+        if (failed.attempts >= MAX_ATTEMPTS && !LOCAL_MODE) {
+          this.deadLetter(failed, e);
+          const remaining = latest.filter((x) => x.opId !== failed.opId);
+          this.writeQueue(remaining);
           this.update({
-            pending: queue.length,
+            pending: remaining.length,
             lastError: e instanceof Error ? e.message : String(e),
             lastFlushAt: Date.now(),
           });
           continue;
         }
-        this.writeQueue(queue);
+        this.writeQueue(latest);
         this.update({
+          pending: latest.length,
           lastError: e instanceof Error ? e.message : String(e),
           lastFlushAt: Date.now(),
         });
@@ -272,15 +287,15 @@ export class SyncQueue {
   }
 
   private async apply(op: SyncOp): Promise<void> {
-    if (op.table === 'personal') {
-      // Personal — один документ на пользователя, ключ user_id.
+    if (op.table === 'personal' || op.table === 'management') {
+      // Singleton-документы на пользователя, ключ user_id.
       if (op.kind === 'delete') {
-        const { error } = await supabase.from('personal').delete().eq('user_id', op.id);
+        const { error } = await supabase.from(op.table).delete().eq('user_id', op.id);
         if (error) throw new Error(error.message);
         return;
       }
       const { error } = await supabase
-        .from('personal')
+        .from(op.table)
         .upsert({ user_id: op.id, ...op.payload }, { onConflict: 'user_id' });
       if (error) throw new Error(error.message);
       return;

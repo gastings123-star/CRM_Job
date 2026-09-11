@@ -31,7 +31,10 @@ export function ExtraTab({ employee }: { employee: Employee }): JSX.Element {
     markDirty();
   }
   function addDev(): void {
-    setDevelopment((arr) => [...arr, { zone: '', status: 'не начато', deadline: '' }]);
+    setDevelopment((arr) => [
+      ...arr,
+      { id: crypto.randomUUID(), zone: '', status: 'не начато', deadline: '' },
+    ]);
     markDirty();
   }
   function removeDev(idx: number): void {
@@ -102,7 +105,8 @@ export function ExtraTab({ employee }: { employee: Employee }): JSX.Element {
 
         {development.length === 0 && (
           <p class="text-sm text-slate-500">
-            Зон развития пока нет. Добавьте первую — например, «System Design» с дедлайном к концу квартала.
+            Зон развития пока нет. Добавьте первую — например, «System Design» с дедлайном к концу
+            квартала.
           </p>
         )}
 
@@ -175,9 +179,7 @@ export function ExtraTab({ employee }: { employee: Employee }): JSX.Element {
           </Button>
         </header>
 
-        {teamHistory.length === 0 && (
-          <p class="text-sm text-slate-500">История пуста.</p>
-        )}
+        {teamHistory.length === 0 && <p class="text-sm text-slate-500">История пуста.</p>}
 
         {teamHistory.length > 0 && (
           <div class="overflow-hidden rounded-xl border border-white/10">

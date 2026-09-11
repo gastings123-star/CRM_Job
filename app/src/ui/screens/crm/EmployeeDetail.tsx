@@ -1,6 +1,6 @@
 import type { JSX } from 'preact';
 import { useLocation, useRoute } from 'preact-iso';
-import { useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { employeesRepo } from '@/infra/repos';
 import { employeeUrl, routes } from '@/app/routes';
 import { crmViewSignal } from '@/state/crm-view';
@@ -15,6 +15,7 @@ import { OneOnOneTab } from './tabs/OneOnOneTab';
 import { ProjectHistoryTab } from './tabs/ProjectHistoryTab';
 import { ExtraTab } from './tabs/ExtraTab';
 import { NotesTab } from './tabs/NotesTab';
+import { ManagementLinks } from '@/ui/screens/management/ManagementLinks';
 
 /**
  * Экран `/crm/:id` — карточка одного сотрудника с табами.
@@ -41,7 +42,14 @@ export function EmployeeDetailScreen(): JSX.Element {
   const id = params.id ?? '';
   const employees = employeesRepo.signal.value;
   const employee = useMemo(() => employees.find((e) => e.id === id) ?? null, [employees, id]);
-  const [active, setActive] = useState<string>('basic');
+  const requestedTab = new URLSearchParams(window.location.search).get('tab');
+  const [active, setActive] = useState<string>(
+    TABS.some((t) => t.id === requestedTab) ? requestedTab! : 'basic',
+  );
+
+  useEffect(() => {
+    setActive(TABS.some((t) => t.id === requestedTab) ? requestedTab! : 'basic');
+  }, [id, requestedTab]);
 
   // Лента из /crm (с применёнными smart list / фильтром / сортировкой).
   // Если экран открыт по прямой ссылке — fallback на репо в дефолтном порядке.
@@ -62,7 +70,8 @@ export function EmployeeDetailScreen(): JSX.Element {
           ← К списку
         </Button>
         <div class="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-slate-400">
-          Сотрудник не найден. Возможно, удалён или ещё не подгрузился — попробуйте обновить страницу.
+          Сотрудник не найден. Возможно, удалён или ещё не подгрузился — попробуйте обновить
+          страницу.
         </div>
       </div>
     );
@@ -117,9 +126,10 @@ export function EmployeeDetailScreen(): JSX.Element {
         </div>
       </header>
 
+      <ManagementLinks employeeId={employee.id} />
       <Tabs items={TABS} active={active} onChange={setActive} />
 
-      <div role="tabpanel">
+      <div role="tabpanel" key={employee.id}>
         {active === 'basic' && <BasicInfoTab employee={employee} />}
         {active === 'load' && <LoadTab employee={employee} />}
         {active === 'skills' && <SkillsTab employee={employee} />}

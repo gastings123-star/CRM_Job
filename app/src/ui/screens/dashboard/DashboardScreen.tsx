@@ -1,3 +1,4 @@
+import { LOCAL_MODE } from '@/infra/local-mode';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 import { useEffect, useMemo } from 'preact/hooks';
@@ -40,9 +41,7 @@ export function DashboardScreen(): JSX.Element {
   // ---- Риски ----
   const risks = useMemo(
     () =>
-      employees
-        .map((e) => ({ e, r: calcRiskScore(e, now) }))
-        .sort((a, b) => b.r.score - a.r.score),
+      employees.map((e) => ({ e, r: calcRiskScore(e, now) })).sort((a, b) => b.r.score - a.r.score),
     [employees, now],
   );
   const highRiskCount = risks.filter((x) => x.r.level === 'high').length;
@@ -58,7 +57,7 @@ export function DashboardScreen(): JSX.Element {
   if (total === 0) {
     return (
       <div class="space-y-6">
-        <h2 class="text-2xl font-semibold">Дашборд</h2>
+        <h2 class="text-2xl font-semibold">{LOCAL_MODE ? 'Аналитика' : 'Дашборд'}</h2>
         <div class="rounded-2xl border border-dashed border-white/10 bg-white/5 p-10 text-center">
           <p class="text-lg text-slate-200">База пуста</p>
           <p class="mt-1 text-sm text-slate-400">
@@ -71,7 +70,7 @@ export function DashboardScreen(): JSX.Element {
 
   return (
     <div class="space-y-6">
-      <h2 class="text-2xl font-semibold">Дашборд</h2>
+      <h2 class="text-2xl font-semibold">{LOCAL_MODE ? 'Аналитика' : 'Дашборд'}</h2>
 
       <section class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <KpiCard label="Сотрудников" value={total} hint="всего в базе" />
@@ -129,9 +128,7 @@ export function DashboardScreen(): JSX.Element {
                 </li>
               ))}
               {notifs.length > 50 && (
-                <li class="px-3 text-xs text-slate-500">
-                  …и ещё {notifs.length - 50} уведомлений
-                </li>
+                <li class="px-3 text-xs text-slate-500">…и ещё {notifs.length - 50} уведомлений</li>
               )}
             </ul>
           )}
@@ -150,16 +147,12 @@ export function DashboardScreen(): JSX.Element {
                     onClick={() => loc.route(employeeUrl(e.id))}
                     class="min-w-0 flex-1 text-left"
                   >
-                    <p class="truncate text-sm text-slate-100">
-                      {e.fullName || '— без имени —'}
-                    </p>
+                    <p class="truncate text-sm text-slate-100">{e.fullName || '— без имени —'}</p>
                     <p class="truncate text-xs text-slate-500">
                       {[e.role, e.team].filter(Boolean).join(' · ') || '—'}
                     </p>
                   </button>
-                  <span class="text-sm font-semibold tabular-nums text-slate-300">
-                    {r.score}
-                  </span>
+                  <span class="text-sm font-semibold tabular-nums text-slate-300">{r.score}</span>
                 </li>
               ))}
             </ol>
@@ -172,7 +165,11 @@ export function DashboardScreen(): JSX.Element {
           <DistroTable rows={byTeam} total={total} />
         </Card>
         <Card title="По грейдам">
-          <DistroTable rows={byGrade} total={total} order={['Junior', 'Middle', 'Senior', 'Lead']} />
+          <DistroTable
+            rows={byGrade}
+            total={total}
+            order={['Junior', 'Middle', 'Senior', 'Lead']}
+          />
         </Card>
       </section>
     </div>
@@ -257,7 +254,12 @@ function RiskDot({ level }: { level: RiskScoreLevel }): JSX.Element {
     medium: 'bg-amber-400',
     high: 'bg-red-400',
   };
-  return <span class={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${cls[level]}`} aria-label={level} />;
+  return (
+    <span
+      class={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${cls[level]}`}
+      aria-label={level}
+    />
+  );
 }
 
 interface DistroRow {
@@ -278,7 +280,9 @@ function DistroTable({
     return <p class="text-sm text-slate-500">Данных нет.</p>;
   }
   const sorted = order
-    ? [...rows].sort((a, b) => (order.indexOf(a.key) - order.indexOf(b.key)) || a.key.localeCompare(b.key))
+    ? [...rows].sort(
+        (a, b) => order.indexOf(a.key) - order.indexOf(b.key) || a.key.localeCompare(b.key),
+      )
     : [...rows].sort((a, b) => b.count - a.count);
   return (
     <ul class="space-y-2">

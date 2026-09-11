@@ -1,3 +1,4 @@
+import { useViewState } from '@/ui/hooks/useViewState';
 import type { JSX } from 'preact';
 import { useLocation } from 'preact-iso';
 import { useEffect, useMemo, useState } from 'preact/hooks';
@@ -41,7 +42,7 @@ export function TeamsScreen(): JSX.Element {
   const allPulse = pulseRepo.signal.value;
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Team | null>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useViewState('teams/TeamsScreen.tsx:query', '');
 
   // Подтягиваем команды + сотрудников при заходе.
   useEffect(() => {
@@ -212,11 +213,7 @@ export function TeamsScreen(): JSX.Element {
         title={editing ? `Команда «${editing.name}»` : ''}
         maxWidth="md"
       >
-        <TeamForm
-          initial={editing}
-          onSubmit={handleEdit}
-          onCancel={() => setEditing(null)}
-        />
+        <TeamForm initial={editing} onSubmit={handleEdit} onCancel={() => setEditing(null)} />
       </Modal>
     </div>
   );
@@ -318,13 +315,7 @@ const STATUS_DOT: Record<PulseStatus, string> = {
   red: 'bg-red-400',
 };
 
-function PulseChip({
-  teamId,
-  all,
-}: {
-  teamId: string;
-  all: TeamPulseSnapshot[];
-}): JSX.Element {
+function PulseChip({ teamId, all }: { teamId: string; all: TeamPulseSnapshot[] }): JSX.Element {
   const sorted = snapshotsForTeam(all, teamId);
   const streak = currentStreak(sorted);
   if (streak.status === null) {

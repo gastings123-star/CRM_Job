@@ -25,7 +25,10 @@ export function TasksTab({ employee }: { employee: Employee }): JSX.Element {
     setDirty(true);
   }
   function add(): void {
-    setTasks((arr) => [...arr, { text: '', status: 'не начата', due: '' }]);
+    setTasks((arr) => [
+      ...arr,
+      { id: crypto.randomUUID(), text: '', status: 'не начата', due: '' },
+    ]);
     setDirty(true);
   }
 

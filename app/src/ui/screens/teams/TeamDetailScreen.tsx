@@ -1,3 +1,4 @@
+import { ManagementLinks } from '@/ui/screens/management/ManagementLinks';
 import type { JSX } from 'preact';
 import { useLocation, useRoute } from 'preact-iso';
 import { useEffect, useMemo, useState } from 'preact/hooks';
@@ -26,12 +27,7 @@ import {
   MOOD_LABEL,
   SOURCE_LABEL,
 } from '@/domain/feedback';
-import type {
-  FeedbackSource,
-  PulseStatus,
-  TeamFeedback,
-  TeamPulseSnapshot,
-} from '@/data/schema';
+import type { FeedbackSource, PulseStatus, TeamFeedback, TeamPulseSnapshot } from '@/data/schema';
 import { PulseSnapshotModal } from './PulseSnapshotModal';
 import { FeedbackModal } from './FeedbackModal';
 
@@ -84,10 +80,7 @@ export function TeamDetailScreen(): JSX.Element {
 
   const team = useMemo(() => teams.find((t) => t.id === teamId) ?? null, [teams, teamId]);
 
-  const sorted = useMemo(
-    () => snapshotsForTeam(allPulse, teamId),
-    [allPulse, teamId],
-  );
+  const sorted = useMemo(() => snapshotsForTeam(allPulse, teamId), [allPulse, teamId]);
   const streak = useMemo(() => currentStreak(sorted), [sorted]);
   const esc4w = useMemo(() => escalationsWindow(sorted, now, 4), [sorted, now]);
   const esc12w = useMemo(() => escalationsWindow(sorted, now, 12), [sorted, now]);
@@ -136,6 +129,7 @@ export function TeamDetailScreen(): JSX.Element {
           {currentSnapshot ? 'Обновить снэпшот за неделю' : '+ Снэпшот за неделю'}
         </Button>
       </header>
+      <ManagementLinks teamId={teamId} />
 
       <section class="grid grid-cols-2 gap-4 md:grid-cols-4">
         <KpiCard label="Статус">
@@ -172,10 +166,14 @@ export function TeamDetailScreen(): JSX.Element {
           </span>
         </header>
         <Sparkline points={spark} />
-        <EscalationsBars points={spark.map((p) => ({
-          weekStart: p.weekStart,
-          escalations: allPulse.find((s) => s.teamId === teamId && s.weekStart === p.weekStart)?.escalations ?? 0,
-        }))} />
+        <EscalationsBars
+          points={spark.map((p) => ({
+            weekStart: p.weekStart,
+            escalations:
+              allPulse.find((s) => s.teamId === teamId && s.weekStart === p.weekStart)
+                ?.escalations ?? 0,
+          }))}
+        />
       </section>
 
       <section class="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-5">
@@ -277,13 +275,16 @@ function FeedbackSection({
   return (
     <section class="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-5">
       <header class="flex flex-wrap items-center gap-3">
-        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Обратная связь
-        </h3>
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Обратная связь</h3>
         <span class="text-xs text-slate-500">{list.length} записей</span>
         <div class="ml-auto flex flex-wrap items-center gap-2">
           <SourceFilter value={source} onChange={onSourceChange} list={list} />
-          <Button variant="secondary" size="sm" onClick={exportMarkdown} disabled={list.length === 0}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={exportMarkdown}
+            disabled={list.length === 0}
+          >
             .md
           </Button>
           <Button variant="secondary" size="sm" onClick={exportJson} disabled={list.length === 0}>
@@ -353,13 +354,7 @@ function SourceFilter({
   );
 }
 
-function FeedbackRow({
-  item,
-  onOpen,
-}: {
-  item: TeamFeedback;
-  onOpen: () => void;
-}): JSX.Element {
+function FeedbackRow({ item, onOpen }: { item: TeamFeedback; onOpen: () => void }): JSX.Element {
   const openItems = item.actionItems.filter((a) => !a.done).length;
   return (
     <li class="rounded-lg bg-white/5 px-3 py-2.5">
@@ -379,9 +374,7 @@ function FeedbackRow({
           Открыть
         </Button>
       </header>
-      {item.note && (
-        <p class="mt-1 line-clamp-2 text-sm text-slate-300">{item.note}</p>
-      )}
+      {item.note && <p class="mt-1 line-clamp-2 text-sm text-slate-300">{item.note}</p>}
       {item.actionItems.length > 0 && (
         <p class="mt-1 text-xs text-slate-500">
           Action items: {item.actionItems.length} · открытых {openItems}
@@ -478,7 +471,13 @@ function Sparkline({
         const x = i * stepX;
         const y = H - (p.value / scale) * H;
         const fill =
-          p.status === 'green' ? '#34d399' : p.status === 'yellow' ? '#fbbf24' : p.status === 'red' ? '#f87171' : '#94a3b8';
+          p.status === 'green'
+            ? '#34d399'
+            : p.status === 'yellow'
+              ? '#fbbf24'
+              : p.status === 'red'
+                ? '#f87171'
+                : '#94a3b8';
         return <circle key={i} cx={x} cy={y} r="3" fill={fill} />;
       })}
     </svg>

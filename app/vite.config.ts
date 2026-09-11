@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath } from 'node:url';
+import { localDataPlugin } from './local-server';
+const localMode = process.env.VITE_LOCAL_MODE === 'true';
 
 // На GitHub Pages приложение раздаётся по подпути `/CRM_Job/`.
 // Локально (`npm run dev`) base должен оставаться `/`, иначе HMR/импорты ломаются.
@@ -12,11 +14,13 @@ export default defineConfig({
   base,
   plugins: [
     preact(),
+    ...(localMode ? [localDataPlugin()] : []),
     VitePWA({
       // autoUpdate — при появлении нового SW он скачается и активируется сам
       // при следующем визите (без интерактивного промпта). Для нашего юзкейса
       // безопасно: данные живут на сервере, конфликта версий локального
       // состояния не будет.
+      disable: localMode,
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
@@ -65,12 +69,16 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  preview: { host: '127.0.0.1', port: localMode ? 4310 : 4173, strictPort: true },
   build: {
+    outDir: localMode ? 'dist-local' : 'dist',
     target: 'es2022',
     sourcemap: true,
   },
   server: {
-    port: 5173,
+    host: '127.0.0.1',
+    port: localMode ? 4310 : 5173,
+    strictPort: true,
     open: false,
   },
 });
