@@ -4,7 +4,7 @@ import { MeetingSummary } from './MeetingSummary';
 import type { ComponentChildren } from 'preact';
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
-import { routes, employeeUrl } from '@/app/routes';
+import { routes, employeeUrl, sameRoutePath } from '@/app/routes';
 import { employeesRepo, teamsRepo, personalRepo, projectsRepo } from '@/infra/repos';
 import { managementRepo } from '@/infra/repos/management';
 import { getSession } from '@/infra/auth';
@@ -46,8 +46,8 @@ export function WorkDesk({ children }: { children: ComponentChildren }) {
     [search, setSearch] = useState('');
   const queryArea = new URLSearchParams(loc.url.split('?')[1] ?? '').get('area');
   const home =
-    loc.path === routes.dashboard.path ||
-    (loc.path === routes.management.path && (!queryArea || queryArea === 'cockpit'));
+    sameRoutePath(loc.path, routes.dashboard.path) ||
+    (sameRoutePath(loc.path, routes.management.path) && (!queryArea || queryArea === 'cockpit'));
   const items = useMemo(
     () => deskItems(state, employees, teams, personal, now),
     [state, employees, teams, personal, now],

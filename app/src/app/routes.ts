@@ -36,6 +36,12 @@ export const routes = {
 
 export type RouteKey = keyof typeof routes;
 
+/** Роутер может убрать завершающий слэш у base URL GitHub Pages. */
+export function sameRoutePath(left: string, right: string): boolean {
+  const normalize = (path: string) => (path.length > 1 ? path.replace(/\/+$/, '') : path);
+  return normalize(left) === normalize(right);
+}
+
 /** Шаблон детальной страницы сотрудника. Не в `routes`, т.к. не показывается в навигации. */
 export const employeeDetailPath = join('/crm/:id');
 
