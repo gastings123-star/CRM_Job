@@ -22,7 +22,7 @@ export default defineConfig({
       // состояния не будет.
       disable: localMode,
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'staff-crm-icon.svg'],
       manifest: {
         name: 'Staff CRM',
         short_name: 'StaffCRM',
