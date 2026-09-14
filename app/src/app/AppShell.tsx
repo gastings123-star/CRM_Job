@@ -23,6 +23,7 @@ import { ConfirmDialogHost } from '@/ui/components/ConfirmDialogHost';
 import { CommandPaletteHost } from '@/ui/components/CommandPaletteHost';
 import { openCommandPalette } from '@/state/command-palette';
 import { LOCAL_MODE } from '@/infra/local-mode';
+import { ThemeToggle } from '@/ui/components/ThemeToggle';
 import { WorkDesk } from '@/ui/screens/workdesk/WorkDesk';
 import { OverviewScreen } from '@/ui/screens/workdesk/OverviewScreen';
 import { ManagementScreen } from '@/ui/screens/management/ManagementScreen';
@@ -97,7 +98,8 @@ function TopBar({ session }: { session: Session }): JSX.Element {
       <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-6 py-3">
         <h1 class="text-lg font-semibold">Staff CRM</h1>
         <Nav />
-        <div class="ml-auto flex items-center gap-4">
+        <div class="ml-auto flex flex-wrap items-center gap-3">
+          <ThemeToggle />
           {LOCAL_MODE ? (
             <span class="text-xs text-slate-400">
               {sync.lastError
