@@ -141,10 +141,10 @@ export function TeamDetailScreen(): JSX.Element {
         </Button>
       </header>
       <section
-        class="rounded-2xl border border-white/10 bg-white/5 p-5"
+        class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
         aria-label="Состав команды"
       >
-        <h3 class="text-lg font-semibold">Состав команды · {members.length}</h3>
+        <h3 class="text-sm font-semibold">Состав команды · {members.length}</h3>
         {membersError && (
           <p role="alert" class="mt-2 text-sm text-red-300">
             Не удалось обновить состав. Показаны доступные данные; обновите страницу для повторной
@@ -159,11 +159,14 @@ export function TeamDetailScreen(): JSX.Element {
             В карточках сотрудников эта команда пока не указана.
           </p>
         )}
-        <ul class="mt-3 divide-y">
+        <ul class="mt-2">
           {members.map((employee) => (
-            <li key={employee.id} class="border-t border-white/10 py-3">
+            <li
+              key={employee.id}
+              class="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 border-t border-white/10 py-1.5 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_5rem]"
+            >
               <a
-                class="text-blue-200 hover:underline"
+                class="min-w-0 break-words text-blue-200 hover:underline"
                 href={employeeUrl(employee.id)}
                 onClick={(e) => {
                   e.preventDefault();
@@ -172,9 +175,12 @@ export function TeamDetailScreen(): JSX.Element {
               >
                 {employee.fullName}
               </a>
-              <p class="mt-1 text-sm text-slate-400">
-                {employee.role || 'Должность не указана'} · {employee.grade}
-              </p>
+              <span class="col-start-1 row-start-2 min-w-0 break-words text-xs text-slate-400 sm:col-start-2 sm:row-start-1 sm:text-sm">
+                {employee.role || 'Должность не указана'}
+              </span>
+              <span class="col-start-2 row-start-1 text-xs text-slate-400 sm:col-start-3">
+                {employee.grade}
+              </span>
             </li>
           ))}
         </ul>
