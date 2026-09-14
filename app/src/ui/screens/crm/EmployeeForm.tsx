@@ -4,9 +4,12 @@ import { Field, Select, TextInput } from '@/ui/components/Field';
 import { Button } from '@/ui/components/Button';
 import type { Employee } from '@/data/schema';
 
+import { TeamSelect } from './TeamSelect';
+
 const GRADES = ['Junior', 'Middle', 'Senior', 'Lead'] as const;
 
 export interface EmployeeFormValues {
+  team: string;
   fullName: string;
   role: string;
   grade: string;
@@ -21,9 +24,18 @@ export interface EmployeeFormErrors {
 
 function fromEmployee(e: Employee | null): EmployeeFormValues {
   if (!e) {
-    return { fullName: '', role: '', grade: 'Junior', hireDate: '', email: '', salary: 0 };
+    return {
+      team: '',
+      fullName: '',
+      role: '',
+      grade: 'Junior',
+      hireDate: '',
+      email: '',
+      salary: 0,
+    };
   }
   return {
+    team: e.team,
     fullName: e.fullName,
     role: e.role,
     grade: e.grade,
@@ -73,12 +85,14 @@ export function EmployeeForm({
           <TextInput
             {...p}
             value={values.fullName}
-            onInput={(e) => patch('fullName', (e.currentTarget).value)}
+            onInput={(e) => patch('fullName', e.currentTarget.value)}
             placeholder="Иван Иванов"
             autoFocus
           />
         )}
       </Field>
+
+      <TeamSelect value={values.team} onChange={(team) => patch('team', team)} />
 
       <div class="grid grid-cols-2 gap-4">
         <Field label="Должность">
@@ -86,7 +100,7 @@ export function EmployeeForm({
             <TextInput
               {...p}
               value={values.role}
-              onInput={(e) => patch('role', (e.currentTarget).value)}
+              onInput={(e) => patch('role', e.currentTarget.value)}
               placeholder="Frontend-разработчик"
             />
           )}
@@ -96,7 +110,7 @@ export function EmployeeForm({
             <Select
               {...p}
               value={values.grade}
-              onChange={(e) => patch('grade', (e.currentTarget).value)}
+              onChange={(e) => patch('grade', e.currentTarget.value)}
             >
               {GRADES.map((g) => (
                 <option key={g} value={g}>
@@ -115,7 +129,7 @@ export function EmployeeForm({
               {...p}
               type="date"
               value={values.hireDate}
-              onInput={(e) => patch('hireDate', (e.currentTarget).value)}
+              onInput={(e) => patch('hireDate', e.currentTarget.value)}
             />
           )}
         </Field>
@@ -125,7 +139,7 @@ export function EmployeeForm({
               {...p}
               type="email"
               value={values.email}
-              onInput={(e) => patch('email', (e.currentTarget).value)}
+              onInput={(e) => patch('email', e.currentTarget.value)}
               placeholder="user@example.com"
             />
           )}
@@ -141,7 +155,7 @@ export function EmployeeForm({
             step={1000}
             value={values.salary}
             onInput={(e) => {
-              const n = Number((e.currentTarget).value);
+              const n = Number(e.currentTarget.value);
               patch('salary', Number.isFinite(n) ? n : 0);
             }}
           />

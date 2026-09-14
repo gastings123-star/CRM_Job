@@ -82,7 +82,7 @@ describe('BasicInfoTab', () => {
     render(<BasicInfoTab employee={sampleEmployee()} />);
     expect(screen.getByDisplayValue('Иван Иванов')).not.toBeNull();
     expect(screen.getByDisplayValue('Frontend')).not.toBeNull();
-    expect(screen.getByDisplayValue('ЕФС')).not.toBeNull();
+    expect(screen.getByLabelText<HTMLSelectElement>(/^Команда/).value).toBe('ЕФС');
     expect(screen.getByDisplayValue('Уфа')).not.toBeNull();
   });
 
