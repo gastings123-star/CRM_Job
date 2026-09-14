@@ -1,20 +1,8 @@
 import { useState } from 'preact/hooks';
 import { dayChecks } from '@/domain/day-checks';
-import { iso } from '@/domain/management';
 import type { DeskItem } from '@/domain/workdesk';
 import { Button } from '@/ui/components/Button';
-type Progress = Record<string, 'checked' | 'deferred'>;
-function readProgress(key: string): Progress {
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(key) ?? '{}');
-    if (!raw || typeof raw !== 'object') return {};
-    return Object.fromEntries(
-      Object.entries(raw).filter(([, v]) => v === 'checked' || v === 'deferred'),
-    );
-  } catch {
-    return {};
-  }
-}
+import { readProgress, saveProgress, progressKey } from '@/state/day-progress';
 export function DayStart({
   items,
   now,
@@ -37,7 +25,7 @@ export function DayStart({
   calendar: () => void;
 }) {
   const steps = dayChecks(items, now, closing),
-    key = `staff-crm-day-checks:${iso(now)}:${closing ? 'close' : 'start'}`;
+    key = progressKey(now, closing);
   const [progress, setProgress] = useState(() => readProgress(key)),
     [index, setIndex] = useState(() => {
       const done = readProgress(key);
@@ -50,12 +38,11 @@ export function DayStart({
     if (!step) return;
     const next = { ...progress, [step.id]: status };
     setProgress(next);
-    try {
-      localStorage.setItem(key, JSON.stringify(next));
-      setSaveError('');
-    } catch {
-      setSaveError('Браузер не сохранил отметки проверки. До закрытия страницы они доступны.');
-    }
+    setSaveError(
+      saveProgress(key, next)
+        ? ''
+        : 'Браузер не сохранил отметки проверки. До закрытия страницы они доступны.',
+    );
     setIndex((i) => i + 1);
   }
   return (
