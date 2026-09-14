@@ -1,3 +1,5 @@
+import { dayChecks } from '@/domain/day-checks';
+import { readProgress, progressKey, dayProgressVersion, checkStatus } from '@/state/day-progress';
 import { useWorkspaceBack } from '@/ui/hooks/useWorkspaceBack';
 import { DayStart } from './DayStart';
 import { MeetingSummary } from './MeetingSummary';
@@ -55,6 +57,25 @@ export function WorkDesk({ children }: { children: ComponentChildren }) {
   const focus = useMemo(() => activeDeskFocus(state, items, now), [state, items, now]);
   const queue = items.filter((i) => i.attention && !focus.some((f) => f.key === i.key));
   const guide = useMemo(() => guideNow(state, now), [state, now]);
+  void dayProgressVersion.value;
+  const morning = checkStatus(readProgress(progressKey(now)), dayChecks(items, now).map((step) => step.id));
+  const startLabel = morning.complete
+    ? 'Повторить проверку'
+    : morning.started
+      ? 'Продолжить проверку'
+      : 'Начать день';
+  const dayTitle = morning.complete
+    ? 'День начат'
+    : morning.started
+      ? 'Проверка дня начата'
+      : 'Можно начать работу сейчас';
+  const dayHint = morning.complete
+    ? 'Утренняя проверка завершена. Продолжайте выбранные дела и работу по ритму.'
+    : morning.started
+      ? morning.deferred
+        ? `Отложенных проверок: ${morning.deferred}. Вернитесь к ним, когда сможете.`
+        : 'Остались шаги утренней проверки. Можно продолжить с места остановки.'
+      : 'Начните с проверки договорённостей или откройте выбранное дело. Расписание — ориентир, начинать раньше можно.';
   const closePicker = useCallback(() => setPicker(false), []);
   const load = useCallback(async () => {
     setError('');
@@ -216,16 +237,19 @@ export function WorkDesk({ children }: { children: ComponentChildren }) {
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="max-w-3xl">
             <h2 class="text-base font-semibold">
-              {guide.current ? `По ритму · ${guide.label}` : 'Можно начать работу сейчас'}
+              {morning.started ? dayTitle : guide.current ? `По ритму · ${guide.label}` : dayTitle}
             </h2>
             <p class="mt-1 text-sm leading-6 text-slate-400">
-              {guide.current?.detail ??
-                'Начните с проверки договорённостей или откройте выбранное дело. Расписание — ориентир, начинать раньше можно.'}
+              {morning.started ? dayHint : (guide.current?.detail ?? dayHint)}
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => startWorkflow('start')}>
-              Начать день
+            <Button
+              size="sm"
+              variant={morning.complete ? 'ghost' : 'primary'}
+              onClick={() => startWorkflow('start')}
+            >
+              {startLabel}
             </Button>
             {(
               guide.current?.links ?? [
@@ -409,13 +433,18 @@ export function WorkDesk({ children }: { children: ComponentChildren }) {
             ) : home ? (
               <div class="space-y-6">
                 <div>
-                  <h3 class="text-xl font-semibold">Что хотите сделать?</h3>
+                  <h3 class="text-xl font-semibold">
+                    {morning.started ? 'Продолжить работу' : 'Что хотите сделать?'}
+                  </h3>
                   <p class="mt-2 text-sm leading-6 text-slate-400">
-                    Если ещё не знаете, за что взяться, начните с проверки дня. Дела в фокусе
-                    выбраны вами — открыть можно любое.
+                    {morning.started
+                      ? dayHint
+                      : 'Если ещё не знаете, за что взяться, начните с проверки дня. Дела в фокусе выбраны вами — открыть можно любое.'}
                   </p>
                   <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                    <Button onClick={() => startWorkflow('start')}>Начать день</Button>
+                    {!morning.complete && (
+                      <Button onClick={() => startWorkflow('start')}>{startLabel}</Button>
+                    )}
                     <Button
                       variant="secondary"
                       onClick={() => loc.route(routes.management.path + '?area=actions&create=1')}

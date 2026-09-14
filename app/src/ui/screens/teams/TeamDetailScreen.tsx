@@ -3,7 +3,7 @@ import type { JSX } from 'preact';
 import { useLocation, useRoute } from 'preact-iso';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { employeesRepo, feedbackRepo, pulseRepo, teamsRepo } from '@/infra/repos';
-import { routes } from '@/app/routes';
+import { routes, employeeUrl } from '@/app/routes';
 import { Button } from '@/ui/components/Button';
 import { toast } from '@/state/ui';
 import {
@@ -68,6 +68,8 @@ export function TeamDetailScreen(): JSX.Element {
   const now = useMemo(() => new Date(), []);
   const [editWeek, setEditWeek] = useState<string | null>(null);
   const [editFeedback, setEditFeedback] = useState<TeamFeedback | null>(null);
+  const [membersLoaded, setMembersLoaded] = useState(false);
+  const [membersError, setMembersError] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackSource, setFeedbackSource] = useState<'all' | FeedbackSource>('all');
 
@@ -75,7 +77,10 @@ export function TeamDetailScreen(): JSX.Element {
     teamsRepo.loadAll().catch((e: unknown) => toast.error(toMsg(e)));
     pulseRepo.loadAll().catch((e: unknown) => toast.error(toMsg(e)));
     feedbackRepo.loadAll().catch(() => undefined);
-    employeesRepo.loadAll().catch(() => undefined);
+    employeesRepo
+      .loadAll()
+      .then(() => setMembersLoaded(true))
+      .catch(() => setMembersError(true));
   }, []);
 
   const team = useMemo(() => teams.find((t) => t.id === teamId) ?? null, [teams, teamId]);
@@ -94,10 +99,16 @@ export function TeamDetailScreen(): JSX.Element {
   );
 
   // Кол-во сотрудников у команды (по строковому Employee.team === team.name).
-  const empCount = useMemo(
-    () => (team ? employees.filter((e) => e.team === team.name).length : 0),
+  const members = useMemo(
+    () =>
+      team
+        ? employees
+            .filter((e) => e.team === team.name)
+            .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
+        : [],
     [team, employees],
   );
+  const empCount = members.length;
 
   if (!team) {
     return (
@@ -129,6 +140,45 @@ export function TeamDetailScreen(): JSX.Element {
           {currentSnapshot ? 'Обновить снэпшот за неделю' : '+ Снэпшот за неделю'}
         </Button>
       </header>
+      <section
+        class="rounded-2xl border border-white/10 bg-white/5 p-5"
+        aria-label="Состав команды"
+      >
+        <h3 class="text-lg font-semibold">Состав команды · {members.length}</h3>
+        {membersError && (
+          <p role="alert" class="mt-2 text-sm text-red-300">
+            Не удалось обновить состав. Показаны доступные данные; обновите страницу для повторной
+            загрузки.
+          </p>
+        )}
+        {!membersLoaded && !membersError && (
+          <p class="mt-2 text-sm text-slate-400">Загружаем состав…</p>
+        )}
+        {membersLoaded && !members.length && (
+          <p class="mt-2 text-sm text-slate-400">
+            В карточках сотрудников эта команда пока не указана.
+          </p>
+        )}
+        <ul class="mt-3 divide-y">
+          {members.map((employee) => (
+            <li key={employee.id} class="border-t border-white/10 py-3">
+              <a
+                class="text-blue-200 hover:underline"
+                href={employeeUrl(employee.id)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  loc.route(employeeUrl(employee.id));
+                }}
+              >
+                {employee.fullName}
+              </a>
+              <p class="mt-1 text-sm text-slate-400">
+                {employee.role || 'Должность не указана'} · {employee.grade}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </section>
       <ManagementLinks teamId={teamId} />
 
       <section class="grid grid-cols-2 gap-4 md:grid-cols-4">
