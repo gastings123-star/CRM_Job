@@ -148,6 +148,7 @@ export function CrmScreen(): JSX.Element {
   function handleEdit(values: EmployeeFormValues): void {
     if (!editing) return;
     const patch: Partial<Employee> = {
+      team: values.team,
       fullName: values.fullName,
       role: values.role,
       grade: values.grade,
@@ -764,6 +765,7 @@ function compareBy(key: SortKey, now: Date): (a: Employee, b: Employee) => numbe
 function makeEmployee(v: EmployeeFormValues): unknown {
   return {
     id: crypto.randomUUID(),
+    team: v.team,
     fullName: v.fullName,
     role: v.role,
     grade: v.grade,

@@ -6,13 +6,10 @@ import { toast } from '@/state/ui';
 import { Button } from '@/ui/components/Button';
 import { Field, Select, TextArea, TextInput } from '@/ui/components/Field';
 
+import { TeamSelect } from '../TeamSelect';
+
 const GRADES = ['Junior', 'Middle', 'Senior', 'Lead'] as const;
-const PROMOTIONS = [
-  'не готов',
-  'готов через 6 мес',
-  'готов через год',
-  'готов сейчас',
-] as const;
+const PROMOTIONS = ['не готов', 'готов через 6 мес', 'готов через год', 'готов сейчас'] as const;
 const RISKS = ['низкий', 'средний', 'высокий'] as const;
 const WORK_PREFS = ['офис', 'гибрид', 'удалённо'] as const;
 
@@ -149,15 +146,7 @@ export function BasicInfoTab({ employee }: { employee: Employee }): JSX.Element 
               />
             )}
           </Field>
-          <Field label="Команда / стрим">
-            {(p) => (
-              <TextInput
-                {...p}
-                value={form.team}
-                onInput={(e) => patch('team', e.currentTarget.value)}
-              />
-            )}
-          </Field>
+          <TeamSelect value={form.team} onChange={(team) => patch('team', team)} />
         </Grid>
         <Grid cols={3}>
           <Field label="Грейд">
@@ -413,6 +402,7 @@ function Grid({
   cols: 2 | 3;
   children: preact.ComponentChildren;
 }): JSX.Element {
-  const cls = cols === 3 ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'grid grid-cols-1 gap-4 md:grid-cols-2';
+  const cls =
+    cols === 3 ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'grid grid-cols-1 gap-4 md:grid-cols-2';
   return <div class={cls}>{children}</div>;
 }

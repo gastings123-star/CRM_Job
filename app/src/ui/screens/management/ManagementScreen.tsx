@@ -514,6 +514,19 @@ export function ManagementScreen({ embedded = false }: { embedded?: boolean }) {
             ref.area === 'daily' && ref.id === d.id ? { area: 'actions', id: x.id } : ref,
           );
         }
+        const addToFocus = (e as SubmitEvent).submitter?.getAttribute('data-add-focus') === 'true';
+        if (a === 'actions' && addToFocus) {
+          if (x.status === 'DONE') throw new Error('Завершённое действие нельзя добавить в фокус.');
+          const today = iso(new Date());
+          if (next.focus.date !== today) next.focus = { date: today, refs: [] };
+          if (!next.focus.refs.some((ref) => ref.area === 'actions' && ref.id === x.id)) {
+            if (next.focus.refs.length >= 3)
+              throw new Error(
+                'В фокусе уже три действия. Сохраните без добавления в фокус или сначала освободите место.',
+              );
+            next.focus.refs.push({ area: 'actions', id: x.id });
+          }
+        }
       }
       await managementRepo.save(next, gateLevel && gateProcess);
       finishEditor();
@@ -1625,6 +1638,11 @@ export function ManagementScreen({ embedded = false }: { embedded?: boolean }) {
                 <Button variant="secondary" type="button" disabled={busy} onClick={closeEditor}>
                   Отмена
                 </Button>
+                {editor.area === 'actions' && !row.id && (
+                  <Button type="submit" data-add-focus="true" disabled={busy} variant="secondary">
+                    Сохранить и добавить в фокус
+                  </Button>
+                )}
                 <Button type="submit" disabled={busy}>
                   {busy ? 'Сохраняется…' : 'Сохранить'}
                 </Button>

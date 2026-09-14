@@ -17,7 +17,7 @@ import {
   withStableWorkIds,
   type DeskItem,
 } from '@/domain/workdesk';
-import { guideNow, type GuideTarget } from '@/domain/management-guide';
+import { workDay, guideNow, type GuideTarget } from '@/domain/management-guide';
 import { Button } from '@/ui/components/Button';
 import { Modal } from '@/ui/components/Modal';
 import { openCommandPalette } from '@/state/command-palette';
@@ -247,6 +247,59 @@ export function WorkDesk({ children }: { children: ComponentChildren }) {
           Далее: {guide.nextDate} · {guide.next.time} · {guide.next.title}
         </p>
       </section>
+      {home && (
+        <section
+          class="rounded-2xl border border-white/10 bg-white/5 p-4"
+          aria-label="Активности дня"
+        >
+          <h2 class="text-base font-semibold">Сегодня по ритму</h2>
+          <p class="mt-1 text-sm text-slate-400">
+            Ориентир на день. Время блока не означает, что работа уже выполнена.
+          </p>
+          {workDay(state, now).length === 0 ? (
+            <p class="mt-3 text-sm">На выходной регулярные активности не назначены.</p>
+          ) : (
+            <div class="mt-3 grid gap-3 md:grid-cols-2">
+              {workDay(state, now).map((slot) => (
+                <article
+                  key={slot.time}
+                  class={`rounded-xl border p-3 ${guide.current?.time === slot.time ? 'border-blue-400 bg-blue-500/10' : 'border-white/10'}`}
+                >
+                  <p class="text-sm text-blue-200">
+                    {slot.time}
+                    {guide.current?.time === slot.time ? ' · Сейчас' : ''}
+                  </p>
+                  <h3 class="mt-1 font-medium">{slot.title}</h3>
+                  <p class="mt-1 text-sm text-slate-400">{slot.detail}</p>
+                  <div class="mt-2 flex flex-wrap gap-3">
+                    {slot.start === 555 ? (
+                      <button
+                        class="text-sm text-blue-200"
+                        onClick={() => {
+                          setSearch('');
+                          setPicker(true);
+                        }}
+                      >
+                        Выбрать фокус →
+                      </button>
+                    ) : (
+                      slot.links.map((link) => (
+                        <button
+                          key={link.label}
+                          class="text-sm text-blue-200"
+                          onClick={() => open(link.target)}
+                        >
+                          {link.label} →
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
       {!loaded ? (
         <p class="p-6 text-sm text-slate-400">
           {error ? 'Исправьте ошибку загрузки и обновите данные.' : 'Собираем рабочий стол…'}
