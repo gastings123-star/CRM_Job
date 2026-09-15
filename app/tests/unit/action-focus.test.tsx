@@ -55,3 +55,46 @@ it('keeps the form open and does not save when focus already contains three acti
   expect(await screen.findByText(/В фокусе уже три действия/)).toBeTruthy();
   expect(saveMock).not.toHaveBeenCalled();
 });
+
+it('hides completed actions by default and keeps them available through the status filter', async () => {
+  history.replaceState(null, '', '/management?area=actions');
+  managementRepo.signal.value = {
+    ...emptyManagement(),
+    actions: [
+      {
+        id: 'active',
+        title: 'Текущее действие',
+        type: 'СВОЯ',
+        due: '2026-09-30',
+        status: 'OPEN',
+        assignee: '',
+        employeeId: '',
+        teamId: '',
+        source: '',
+      },
+      {
+        id: 'done',
+        title: 'Завершённое действие',
+        type: 'СВОЯ',
+        due: '2026-09-14',
+        status: 'DONE',
+        assignee: '',
+        employeeId: '',
+        teamId: '',
+        source: '',
+      },
+    ],
+  };
+
+  render(
+    <LocationProvider>
+      <ManagementScreen embedded />
+    </LocationProvider>,
+  );
+
+  expect(await screen.findByRole('button', { name: 'Текущее действие' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Завершённое действие' })).toBeNull();
+  fireEvent.change(screen.getByLabelText('Фильтр статуса'), { target: { value: 'DONE' } });
+  expect(await screen.findByRole('button', { name: 'Завершённое действие' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Текущее действие' })).toBeNull();
+});

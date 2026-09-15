@@ -40,6 +40,11 @@ const statusLabels: Record<string, string> = {
   CONTROL: 'Проверить результат',
   DONE: 'Готово',
 };
+const ACTIVE_STATUS = '__active';
+const terminalStatus: Partial<Record<ManagementArea, string>> = {
+  actions: 'DONE',
+  problems: 'CLOSED',
+};
 const displayText = (...values: (string | undefined)[]) =>
   values.find((value) => value?.trim()) ?? '';
 export const titles: Record<string, string> = {
@@ -396,7 +401,7 @@ export function ManagementScreen({ embedded = false }: { embedded?: boolean }) {
     [teamFilter, setTeamFilter] = useState(query.get('team') ?? ''),
     [empFilter, setEmpFilter] = useState(query.get('employee') ?? ''),
     [quarterFilter, setQuarterFilter] = useState(''),
-    [statusFilter, setStatusFilter] = useState(''),
+    [statusFilter, setStatusFilter] = useState(ACTIVE_STATUS),
     [editor, setEditor] = useState<{ area: string; convert?: string } | null>(null),
     [row, setRow] = useState<ManagementRow>({ id: '' }),
     [formError, setFormError] = useState(''),
@@ -444,7 +449,7 @@ export function ManagementScreen({ embedded = false }: { embedded?: boolean }) {
     setTeamFilter('');
     setEmpFilter('');
     setQuarterFilter('');
-    setStatusFilter('');
+    setStatusFilter(ACTIVE_STATUS);
     loc.route(routes.management.path + '?area=' + a);
   };
   const teamName = (id: string | undefined) =>
@@ -587,7 +592,10 @@ export function ManagementScreen({ embedded = false }: { embedded?: boolean }) {
         (!teamFilter || x.teamId === teamFilter) &&
         (!empFilter || x.employeeId === empFilter) &&
         (!quarterFilter || x.quarter === quarterFilter) &&
-        (!statusFilter || x.status === statusFilter) &&
+        (!['actions', 'problems'].includes(a) ||
+          (statusFilter === ACTIVE_STATUS
+            ? x.status !== terminalStatus[a]
+            : !statusFilter || x.status === statusFilter)) &&
         (!search ||
           [...Object.values(x), teamName(x.teamId), empName(x.employeeId)]
             .join(' ')
@@ -732,25 +740,36 @@ export function ManagementScreen({ embedded = false }: { embedded?: boolean }) {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.currentTarget.value)}
           >
-            <option value="">Все статусы</option>
+            <option value={ACTIVE_STATUS}>Текущие</option>
             {(a === 'actions'
               ? ['OPEN', 'WAITING', 'CONTROL', 'DONE']
               : ['NEW', 'IN WORK', 'MONITORING', 'CLOSED']
             ).map((x) => (
-              <option key={x}>{x}</option>
+              <option key={x} value={x}>
+                {statusLabels[x] ?? x}
+              </option>
             ))}
+            <option value="">Все, включая завершённые</option>
           </select>
         )}
       </div>
     );
   }
   function Collection({ a }: { a: ManagementArea }) {
+    const visibleRows = rows(a);
+    const hasExplicitFilters = Boolean(
+      search ||
+        teamFilter ||
+        empFilter ||
+        quarterFilter ||
+        (['actions', 'problems'].includes(a) && statusFilter !== ACTIVE_STATUS),
+    );
     return (
       <div class="space-y-4">
         <Filters a={a} />
-        {rows(a).length ? (
+        {visibleRows.length ? (
           <div class="mos-panel !p-0">
-            {rows(a).map((x) => (
+            {visibleRows.map((x) => (
               <RecordCard key={x.id} a={a} x={x} />
             ))}
           </div>
@@ -758,18 +777,20 @@ export function ManagementScreen({ embedded = false }: { embedded?: boolean }) {
           <Box title={titles[a]!}>
             <Empty
               text={
-                s[a].length
+                hasExplicitFilters
                   ? 'Нет записей по выбранным фильтрам.'
+                  : s[a].length && terminalStatus[a]
+                    ? 'Текущих записей нет. Завершённые доступны в фильтре статуса.'
                   : 'Пока нет записей. Добавьте реальное действие или наблюдение, когда оно появится.'
               }
-              action={s[a].length ? 'Сбросить фильтры' : 'Добавить запись'}
+              action={hasExplicitFilters ? 'Сбросить фильтры' : 'Добавить запись'}
               onClick={() =>
-                s[a].length
+                hasExplicitFilters
                   ? (setSearch(''),
                     setTeamFilter(''),
                     setEmpFilter(''),
                     setQuarterFilter(''),
-                    setStatusFilter(''))
+                    setStatusFilter(ACTIVE_STATUS))
                   : open(a)
               }
             />
